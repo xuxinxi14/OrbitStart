@@ -1,0 +1,17 @@
+{
+  "id": "hello-command",
+  "name": "Hello Command",
+  "version": "0.1.0",
+  "description": "Minimal local OrbitStart command plugin template.",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "ui:toast", "label": "Show toast messages", "risk": "low" }
+  ],
+  "contributes": {
+    "commands": 1,
+    "searchProviders": 1,
+    "themes": 0,
+    "views": 0
+  }
+}

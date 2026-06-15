@@ -1,0 +1,17 @@
+[package]
+name = "orbitstart"
+version = "0.4.0"
+description = "OrbitStart plugin-driven Windows launcher"
+authors = ["OrbitStart contributors"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+base64 = "0.22"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-global-shortcut = "2.3.2"

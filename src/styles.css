@@ -1,0 +1,4331 @@
+@import url('https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Caveat:wght@700&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
+
+:root {
+  --font-ui: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --font-title: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", "IBM Plex Mono", "Consolas", monospace;
+
+  --bg-deep: #050812;
+  --bg: #070b14;
+  --app-bg: rgba(8, 12, 22, 0.94);
+  --rail: rgba(8, 12, 22, 0.92);
+  --surface: rgba(13, 19, 31, 0.9);
+  --surface-2: rgba(17, 24, 39, 0.88);
+  --surface-3: rgba(22, 31, 48, 0.86);
+  --field: rgba(255, 255, 255, 0.045);
+  --field-strong: rgba(255, 255, 255, 0.072);
+  --line: rgba(255, 242, 198, 0.1);
+  --line-strong: rgba(214, 168, 92, 0.24);
+  --line-focus: rgba(39, 215, 198, 0.5);
+  --text: #f4ebd3;
+  --soft: #c9bfa8;
+  --muted: #8f9aaf;
+  --gold: #d6a85c;
+  --teal: #27d7c6;
+  --teal-soft: #65f1e4;
+  --danger: #ff7a90;
+  --ok: #80e6a7;
+  --warning: #e9bd68;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 14px 34px rgba(0, 0, 0, 0.24);
+  --shadow-elevated: 0 24px 90px rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 3px rgba(39, 215, 198, 0.14);
+
+  font-family: var(--font-ui);
+  color: var(--text);
+  background: var(--bg);
+  font-synthesis: none;
+  font-kerning: normal;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  margin: 0;
+  min-width: 980px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.45;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+}
+
+body,
+.app-shell {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable=""] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img,
+a {
+  -webkit-user-drag: none;
+}
+
+button,
+input,
+select,
+textarea {
+  letter-spacing: 0;
+}
+
+button {
+  color: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 1px solid var(--line-focus);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.025);
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(5, 8, 18, 0.6);
+  border-radius: 999px;
+  background: rgba(143, 154, 175, 0.45);
+}
+
+.local-galaxy-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg-deep);
+}
+
+.local-galaxy-backdrop::after {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(5, 8, 18, 0.78), rgba(5, 8, 18, 0.56) 45%, rgba(5, 8, 18, 0.78)),
+    linear-gradient(180deg, rgba(5, 8, 18, 0.28), rgba(5, 8, 18, 0.74));
+  content: "";
+}
+
+.galaxy-layer {
+  position: absolute;
+  display: block;
+  max-width: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.galaxy-layer-main,
+.galaxy-layer-stars {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
+.galaxy-layer-nebula {
+  inset: -2% 0 auto 0;
+  width: 100%;
+  height: 66%;
+  object-fit: cover;
+  mix-blend-mode: screen;
+}
+
+.galaxy-layer-top-flow {
+  top: -80px;
+  left: 72px;
+  width: calc(100% - 96px);
+  height: 150px;
+  object-fit: cover;
+  mix-blend-mode: screen;
+}
+
+.galaxy-layer-orbit {
+  right: -170px;
+  top: -185px;
+  width: 560px;
+  height: 560px;
+  object-fit: contain;
+  mix-blend-mode: screen;
+}
+
+.app-shell {
+  position: relative;
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  grid-template-rows: 34px minmax(0, 1fr);
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--bg);
+}
+
+.app-shell > :not(.local-galaxy-backdrop):not(.palette-backdrop) {
+  position: relative;
+  z-index: 2;
+}
+
+.aux-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.aux-shell .window-titlebar {
+  grid-column: 1;
+}
+
+.aux-workspace {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-5) var(--space-6) var(--space-6);
+}
+
+.aux-shell .settings-shell {
+  min-height: calc(100vh - 74px);
+}
+
+.mini-panel-button {
+  border-color: var(--line);
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mini-panel-button:hover {
+  border-color: rgba(39, 215, 198, 0.32);
+  background: rgba(39, 215, 198, 0.08);
+}
+
+:root:not([data-theme="local-galaxy"]) .window-titlebar {
+  background: var(--app-bg);
+  border-bottom-color: var(--line);
+}
+
+:root:not([data-theme="local-galaxy"]) .sidebar {
+  background: var(--rail);
+  border-right-color: var(--line);
+  box-shadow: none;
+}
+
+:root:not([data-theme="local-galaxy"]) .sidebar::after {
+  display: none;
+}
+
+:root:not([data-theme="local-galaxy"]) .brand-orbit,
+:root:not([data-theme="local-galaxy"]) .resource-icon,
+:root:not([data-theme="local-galaxy"]) .result-icon,
+:root:not([data-theme="local-galaxy"]) .status-icon {
+  border-color: var(--line);
+  background-image:
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent, var(--teal)) 14%, transparent), transparent 48%),
+    var(--field);
+}
+
+:root:not([data-theme="local-galaxy"]) .brand-orbit {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+:root:not([data-theme="local-galaxy"]) .brand-mark strong {
+  color: var(--text);
+}
+
+:root:not([data-theme="local-galaxy"]) .brand-mark span,
+:root:not([data-theme="local-galaxy"]) .mini-panel span,
+:root:not([data-theme="local-galaxy"]) .rail-button,
+:root:not([data-theme="local-galaxy"]) .icon-action,
+:root:not([data-theme="local-galaxy"]) .window-controls button {
+  color: var(--muted);
+}
+
+:root:not([data-theme="local-galaxy"]) .mini-panel {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+:root:not([data-theme="local-galaxy"]) .mini-panel strong {
+  color: var(--accent-2);
+}
+
+:root:not([data-theme="local-galaxy"]) .rail-button:hover,
+:root:not([data-theme="local-galaxy"]) .icon-action:hover {
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+  color: var(--text);
+}
+
+:root:not([data-theme="local-galaxy"]) .rail-button.active {
+  background: color-mix(in srgb, var(--accent) 15%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+  color: var(--accent);
+}
+
+:root:not([data-theme="local-galaxy"]) .topbar,
+:root:not([data-theme="local-galaxy"]) .surface-panel,
+:root:not([data-theme="local-galaxy"]) .setting-card,
+:root:not([data-theme="local-galaxy"]) .resource-row,
+:root:not([data-theme="local-galaxy"]) .status-card,
+:root:not([data-theme="local-galaxy"]) .theme-card {
+  background: var(--surface);
+  border-color: var(--line);
+  box-shadow: var(--shadow-card);
+}
+
+:root:not([data-theme="local-galaxy"]) .resource-row:hover,
+:root:not([data-theme="local-galaxy"]) .resource-row.selected,
+:root:not([data-theme="local-galaxy"]) .group-tabs button:hover,
+:root:not([data-theme="local-galaxy"]) .group-tabs button.selected,
+:root:not([data-theme="local-galaxy"]) .settings-menu button:hover,
+:root:not([data-theme="local-galaxy"]) .settings-menu button.active {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--line));
+}
+
+:root:not([data-theme="local-galaxy"]) .eyebrow {
+  color: var(--accent-2);
+}
+
+:root:not([data-theme="local-galaxy"]) .search-shell input::placeholder,
+:root:not([data-theme="local-galaxy"]) .palette-input input::placeholder {
+  color: color-mix(in srgb, var(--muted) 86%, transparent);
+}
+
+:root:not([data-theme="local-galaxy"]) .form-grid select option,
+:root:not([data-theme="local-galaxy"]) .setting-list select option,
+:root:not([data-theme="local-galaxy"]) .batch-toolbar select option {
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .title-subtitle,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .kpi-card span,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .resource-copy small,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .resource-meta-column small,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .section-head span,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .setting-card p {
+  color: var(--muted);
+}
+
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .group-tabs button,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .secondary-action,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .wide-command,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .setting-list label,
+:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .form-grid label {
+  color: var(--soft);
+}
+
+:root[data-theme="local-galaxy"] .topbar,
+:root[data-theme="local-galaxy"] .search-shell,
+:root[data-theme="local-galaxy"] .group-tabs button,
+:root[data-theme="local-galaxy"] .primary-action,
+:root[data-theme="local-galaxy"] .status-card,
+:root[data-theme="local-galaxy"] .settings-menu,
+:root[data-theme="local-galaxy"] .surface-panel,
+:root[data-theme="local-galaxy"] .setting-card {
+  position: relative;
+  overflow: hidden;
+}
+
+:root[data-theme="local-galaxy"] .topbar::after {
+  position: absolute;
+  right: 0;
+  bottom: -22px;
+  left: 0;
+  height: 44px;
+  background: var(--asset-divider-glow) center / 100% 100% no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+:root[data-theme="local-galaxy"] .search-shell::before,
+:root[data-theme="local-galaxy"] .group-tabs button.selected::before,
+:root[data-theme="local-galaxy"] .primary-action::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease-out;
+}
+
+:root[data-theme="local-galaxy"] .search-shell::before {
+  background: var(--asset-search-edge) center / 100% 100% no-repeat;
+}
+
+:root[data-theme="local-galaxy"] .search-shell:focus-within::before {
+  opacity: 0.42;
+}
+
+:root[data-theme="local-galaxy"] .group-tabs button.selected::before {
+  background: var(--asset-active-tab-glow) center / 120% 150% no-repeat;
+  opacity: 0.28;
+}
+
+:root[data-theme="local-galaxy"] .primary-action::after {
+  inset: -56px -34px;
+  background: var(--asset-cyan-glow) center / contain no-repeat;
+}
+
+:root[data-theme="local-galaxy"] .primary-action:hover::after {
+  opacity: 0.18;
+}
+
+:root[data-theme="local-galaxy"] .status-card::after {
+  position: absolute;
+  right: 10px;
+  bottom: 6px;
+  width: 58px;
+  height: 58px;
+  background: var(--asset-radar) center / contain no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+:root[data-theme="local-galaxy"] .settings-menu::after {
+  position: absolute;
+  right: -28px;
+  bottom: -30px;
+  width: 150px;
+  height: 150px;
+  background: var(--asset-settings-star-map) center / contain no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+:root[data-theme="local-galaxy"] .logs-panel::before {
+  position: absolute;
+  inset: var(--space-3);
+  border-radius: 12px;
+  background: var(--asset-log-texture) center / cover no-repeat;
+  content: "";
+  mix-blend-mode: soft-light;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+:root[data-theme="local-galaxy"] .logs-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-theme="local-galaxy"] .surface-panel > *,
+:root[data-theme="local-galaxy"] .setting-card > *,
+:root[data-theme="local-galaxy"] .settings-menu > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-theme="local-galaxy"] .resource-panel::after,
+:root[data-theme="local-galaxy"] .setting-card::after {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  width: 72px;
+  height: 72px;
+  background: var(--asset-panel-corner) right top / contain no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.drop-overlay {
+  position: fixed !important;
+  inset: 42px 18px 18px 104px;
+  z-index: 20 !important;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(39, 215, 198, 0.5);
+  border-radius: var(--radius-lg);
+  background: rgba(5, 11, 22, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(233, 189, 104, 0.15), 0 0 42px rgba(39, 215, 198, 0.18);
+  pointer-events: none;
+}
+
+.drop-overlay div {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  padding: var(--space-6);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: rgba(13, 19, 32, 0.92);
+  text-align: center;
+}
+
+.drop-overlay svg {
+  color: var(--accent);
+}
+
+.drop-overlay strong {
+  color: var(--text);
+  font-size: 20px;
+}
+
+.drop-overlay span {
+  color: var(--soft);
+}
+
+.window-titlebar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 34px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(7, 11, 20, 0.86);
+}
+
+.window-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 10px;
+  color: var(--soft);
+  font-size: 12px;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.window-brand img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.window-brand-glyph {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent, var(--teal));
+}
+
+.window-brand-glyph img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.window-drag-fill {
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 24px;
+}
+
+.window-controls {
+  display: inline-flex;
+  align-items: stretch;
+  height: 100%;
+  flex: 0 0 auto;
+}
+
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+
+.window-controls button:hover {
+  background: rgba(255, 255, 255, 0.075);
+  color: var(--text);
+}
+
+.window-controls .close-window:hover {
+  background: rgba(232, 76, 92, 0.86);
+  color: white;
+}
+
+.sidebar {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 0;
+  padding: var(--space-4) var(--space-3);
+  border-right: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(8, 12, 22, 0.96), rgba(7, 11, 20, 0.88));
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.03);
+}
+
+.sidebar::after {
+  display: block;
+  width: 46px;
+  height: 46px;
+  margin-top: auto;
+  border: 1px solid rgba(214, 168, 92, 0.18);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(214, 168, 92, 0.76) 0 2px, transparent 3px),
+    radial-gradient(circle, transparent 0 48%, rgba(214, 168, 92, 0.24) 49% 50%, transparent 51%),
+    linear-gradient(90deg, transparent 0 49%, rgba(214, 168, 92, 0.18) 49% 51%, transparent 51%),
+    linear-gradient(0deg, transparent 0 49%, rgba(214, 168, 92, 0.18) 49% 51%, transparent 51%);
+  content: "";
+  opacity: 0.7;
+}
+
+.brand-mark {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  text-align: center;
+}
+
+.brand-orbit {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.brand-orbit img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.brand-orbit svg {
+  color: var(--accent, var(--teal));
+}
+
+.brand-mark strong {
+  display: block;
+  max-width: 60px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-mark span {
+  display: block;
+  max-width: 60px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rail {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  justify-items: center;
+}
+
+.rail-button,
+.icon-action {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out, transform 140ms ease-out;
+}
+
+.rail-button:hover,
+.icon-action:hover {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--soft);
+}
+
+.rail-button.active {
+  border-color: rgba(39, 215, 198, 0.28);
+  background: rgba(39, 215, 198, 0.12);
+  color: var(--teal-soft);
+}
+
+.mini-panel {
+  display: grid;
+  gap: 2px;
+  width: 56px;
+  min-height: 50px;
+  padding: var(--space-2) var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  text-align: center;
+}
+
+.mini-panel span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mini-panel strong {
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.workspace {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  padding: var(--space-5) var(--space-6) var(--space-6);
+  overflow-y: auto;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-5);
+  min-height: 64px;
+  padding: 0 var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.title-subtitle {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--gold);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.top-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--space-2);
+}
+
+.hero-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.search-shell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  height: 44px;
+  min-width: 0;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--field);
+}
+
+.search-shell:focus-within {
+  border-color: var(--line-focus);
+  background: var(--field-strong);
+}
+
+.search-shell svg,
+.palette-input svg,
+.wide-command svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.search-shell input,
+.palette-input input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.search-shell input::placeholder,
+.palette-input input::placeholder {
+  color: rgba(143, 154, 175, 0.76);
+}
+
+kbd {
+  min-width: 44px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: center;
+}
+
+.primary-action,
+.secondary-action,
+.wide-command,
+.switch-button,
+.batch-toolbar button,
+.batch-toolbar select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 140ms ease-out, border-color 140ms ease-out, color 140ms ease-out, transform 140ms ease-out;
+}
+
+.primary-action {
+  height: 44px;
+  padding: 0 var(--space-5);
+  border: 1px solid rgba(39, 215, 198, 0.42);
+  background: linear-gradient(135deg, rgba(39, 215, 198, 0.95), rgba(20, 132, 142, 0.92));
+  color: #041015;
+  font-weight: 700;
+}
+
+.secondary-action {
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--soft);
+}
+
+.secondary-action:hover,
+.wide-command:hover,
+.switch-button:hover {
+  border-color: rgba(39, 215, 198, 0.32);
+  background: rgba(39, 215, 198, 0.08);
+  color: var(--text);
+}
+
+.primary-action:hover {
+  transform: translateY(-1px);
+}
+
+.primary-action:disabled,
+.secondary-action:disabled,
+.icon-action:disabled,
+.wide-command:disabled,
+.switch-button:disabled,
+.resource-launch:disabled {
+  cursor: default;
+  opacity: 0.52;
+  transform: none;
+}
+
+.page-layout {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.kpi-grid,
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.kpi-card,
+.metric-strip span,
+.surface-panel,
+.setting-card,
+.command-palette,
+.modal-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.kpi-card {
+  display: grid;
+  gap: 3px;
+  min-height: 82px;
+  padding: var(--space-4);
+}
+
+.kpi-card span,
+.metric-strip span,
+.section-head span,
+.status-card p,
+.setting-card p,
+.resource-copy small,
+.resource-meta-column small,
+.plugin-card span,
+.theme-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.kpi-card strong,
+.metric-strip strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.kpi-card em,
+.resource-meta-column em {
+  color: var(--soft);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.metric-strip span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 42px;
+  padding: 0 var(--space-4);
+}
+
+.metric-strip strong {
+  font-size: 16px;
+}
+
+.group-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.group-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--soft);
+  cursor: pointer;
+}
+
+.group-tabs button:hover,
+.group-tabs button.selected {
+  border-color: rgba(39, 215, 198, 0.34);
+  background: rgba(39, 215, 198, 0.1);
+  color: var(--text);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.surface-panel,
+.setting-card {
+  min-width: 0;
+  padding: var(--space-4);
+}
+
+.resource-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.section-head h2,
+.setting-card h2,
+.panel-card h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.section-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.compact-action {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  font-size: 12px;
+}
+
+.danger-action {
+  border-color: rgba(255, 122, 144, 0.46) !important;
+  color: var(--danger) !important;
+}
+
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.batch-toolbar strong {
+  margin-right: auto;
+}
+
+.batch-toolbar button,
+.batch-toolbar select {
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--soft);
+}
+
+.resource-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.resource-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(96px, 1fr) auto;
+  min-height: 142px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  overflow: hidden;
+}
+
+.resource-row:hover,
+.resource-row.selected {
+  border-color: rgba(39, 215, 198, 0.32);
+  background: rgba(39, 215, 198, 0.055);
+}
+
+.resource-launch {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 96px;
+  padding: var(--space-3);
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resource-icon,
+.result-icon,
+.status-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid rgba(39, 215, 198, 0.22);
+  border-radius: 12px;
+  background-image:
+    var(--asset-icon-base, none),
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--accent, var(--teal)) 18%, transparent), transparent 46%),
+    rgba(255, 255, 255, 0.045);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 112% 112%, auto, auto;
+  color: var(--accent, var(--teal));
+  overflow: hidden;
+}
+
+.resource-icon img,
+.result-icon img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.resource-copy,
+.data-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resource-launch .resource-icon {
+  grid-row: 1 / span 2;
+}
+
+.resource-copy strong,
+.palette-results strong,
+.plugin-card strong,
+.theme-card strong {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-copy small,
+.palette-results small,
+.plugin-card span,
+.theme-card small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-meta-column {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tile-check {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+}
+
+.tile-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--line);
+}
+
+.tile-actions button {
+  display: grid;
+  place-items: center;
+  height: 34px;
+  border: 1px solid transparent;
+  border-right-color: var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tile-actions button:last-child {
+  border-right-color: transparent;
+}
+
+.tile-actions button:hover {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.favorite-action img {
+  width: 17px;
+  height: 17px;
+  object-fit: contain;
+}
+
+.favorite-action.is-favorite {
+  color: var(--gold);
+}
+
+.operations-panel {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.status-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 86px;
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.status-card p {
+  margin: 0 0 3px;
+}
+
+.status-card strong {
+  display: block;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.status-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.operation-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.wide-command {
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--soft);
+  text-align: left;
+}
+
+.wide-command::after {
+  margin-left: auto;
+  color: var(--muted);
+  content: "›";
+  font-size: 18px;
+}
+
+.toast-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--soft);
+  font-size: 12px;
+}
+
+.toast-line svg {
+  color: var(--ok);
+  flex: 0 0 auto;
+}
+
+.toast-line span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.settings-menu {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.settings-menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--soft);
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-menu button:hover,
+.settings-menu button.active {
+  border-color: rgba(39, 215, 198, 0.28);
+  background: rgba(39, 215, 198, 0.1);
+  color: var(--text);
+}
+
+.settings-content {
+  min-width: 0;
+}
+
+.settings-page-grid,
+.management-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: stretch;
+}
+
+.wide-card,
+.span-2 {
+  grid-column: span 2;
+}
+
+.setting-card,
+.panel-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 150px;
+}
+
+.setting-card p,
+.panel-card p {
+  margin: 0;
+  line-height: 1.55;
+}
+
+.setting-list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: auto;
+}
+
+.setting-list label,
+.form-grid label {
+  display: grid;
+  gap: 6px;
+  color: var(--soft);
+  font-size: 12px;
+}
+
+.setting-inline {
+  display: flex !important;
+  align-items: center;
+  gap: var(--space-2) !important;
+}
+
+.setting-list input,
+.setting-list select,
+.form-grid input,
+.form-grid select,
+.form-grid textarea,
+.backup-panel textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--text);
+  outline: none;
+}
+
+.setting-list input,
+.setting-list select,
+.form-grid input,
+.form-grid select,
+.form-grid select {
+  min-height: 38px;
+  padding: 0 var(--space-3);
+}
+
+.setting-inline input,
+.checkbox-field input {
+  width: 16px;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+}
+
+.form-grid textarea {
+  min-height: 126px;
+  padding: var(--space-3);
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.form-grid select option,
+.setting-list select option,
+.batch-toolbar select option {
+  background: #0d1320;
+  color: var(--text);
+}
+
+.data-table,
+.plugin-card-list,
+.log-list,
+.path-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.data-row,
+.plugin-card,
+.log-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 54px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.plugin-card {
+  grid-template-columns: minmax(0, 1.3fr) minmax(140px, 0.9fr) 110px auto;
+}
+
+.plugin-card small {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.permission-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.permission-row em,
+.theme-card em,
+.detail-tags em {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.052);
+  color: var(--soft);
+  font-size: 11px;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.switch-button {
+  min-width: 76px;
+  height: 34px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+}
+
+.switch-button.on,
+.risk-low {
+  background: rgba(128, 230, 167, 0.12);
+  color: var(--ok);
+}
+
+.risk-medium,
+.log-row.warn {
+  background: rgba(233, 189, 104, 0.12);
+  color: var(--warning);
+}
+
+.risk-high,
+.log-row.error {
+  background: rgba(255, 122, 144, 0.12);
+  color: var(--danger);
+}
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+}
+
+.theme-card {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 138px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.theme-card:hover,
+.theme-card.selected {
+  border-color: rgba(39, 215, 198, 0.34);
+  background: rgba(39, 215, 198, 0.08);
+}
+
+.theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.theme-swatches i {
+  height: 24px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.path-list code {
+  display: block;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--soft);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.log-row {
+  grid-template-columns: 160px minmax(0, 1fr) 90px;
+}
+
+.log-row span {
+  overflow: hidden;
+  color: var(--soft);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.log-row em {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-style: normal;
+  text-align: right;
+}
+
+.empty-state,
+.empty-copy {
+  display: grid;
+  gap: var(--space-2);
+  align-content: center;
+  justify-items: center;
+  min-height: 180px;
+  padding: var(--space-6);
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-state strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.context-menu {
+  position: fixed !important;
+  z-index: 10020;
+  display: grid;
+  min-width: 218px;
+  padding: 6px;
+  border: 1px solid rgba(255, 242, 198, 0.14);
+  border-radius: 10px;
+  background: rgba(12, 16, 24, 0.96);
+  box-shadow: 0 18px 52px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  animation: context-menu-in 110ms ease-out both;
+}
+
+.context-menu button {
+  display: flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--soft);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.context-menu button:hover:not(:disabled) {
+  background: rgba(39, 215, 198, 0.12);
+  color: var(--text);
+}
+
+.context-menu button:disabled {
+  color: rgba(143, 154, 175, 0.45);
+  cursor: default;
+}
+
+.context-menu .context-danger {
+  color: var(--danger);
+}
+
+.context-separator {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
+}
+
+.palette-backdrop {
+  position: fixed !important;
+  inset: 0;
+  z-index: 9999 !important;
+  display: grid;
+  place-items: start center;
+  padding-top: 9vh;
+  background: rgba(5, 8, 18, 0.72);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  animation: backdrop-fade 160ms ease-out both;
+}
+
+.centered-backdrop {
+  place-items: center;
+  padding: var(--space-6);
+}
+
+.command-palette {
+  width: min(760px, calc(100vw - 48px));
+  overflow: hidden;
+  box-shadow: var(--shadow-elevated);
+}
+
+.command-palette,
+.modal-panel {
+  animation: modal-rise 190ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.palette-input {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  height: 58px;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.palette-input button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.palette-input button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.palette-results {
+  display: grid;
+  max-height: min(64vh, 620px);
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.palette-results button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 58px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.palette-results button:hover {
+  border-color: rgba(39, 215, 198, 0.26);
+  background: rgba(39, 215, 198, 0.07);
+}
+
+.palette-results button > span:nth-child(2) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.palette-results em {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.modal-panel {
+  width: min(720px, calc(100vw - 48px));
+  box-shadow: var(--shadow-elevated);
+}
+
+.dialog-panel {
+  width: min(520px, calc(100vw - 48px));
+}
+
+.editor-panel {
+  max-height: 86vh;
+  overflow-y: auto;
+}
+
+.backup-panel {
+  width: min(820px, calc(100vw - 48px));
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+.checkbox-field {
+  display: flex !important;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: var(--space-2) !important;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.dialog-body {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.dialog-body label {
+  display: grid;
+  gap: 6px;
+  color: var(--soft);
+  font-size: 12px;
+}
+
+.dialog-body input,
+.dialog-body select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--text);
+  outline: none;
+}
+
+.dialog-warning {
+  margin: 0;
+  color: var(--soft);
+  line-height: 1.55;
+}
+
+.dialog-target {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.dialog-target span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dialog-target strong,
+.dialog-target small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialog-target small {
+  color: var(--muted);
+}
+
+.dialog-action {
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border-radius: 10px;
+  background: rgba(255, 122, 144, 0.08);
+}
+
+.field-actions,
+.icon-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.field-actions .secondary-action,
+.icon-picker-row .secondary-action {
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  font-size: 12px;
+}
+
+.icon-picker-row .resource-icon {
+  flex: 0 0 auto;
+}
+
+.backup-panel textarea {
+  display: block;
+  min-height: 330px;
+  width: calc(100% - 32px);
+  margin: var(--space-4);
+  padding: var(--space-3);
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.backup-path {
+  margin: var(--space-3) var(--space-4) 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.plugin-detail-panel {
+  width: min(720px, calc(100vw - 48px));
+}
+
+.plugin-detail-body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.detail-kv {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.detail-kv span,
+.plugin-detail-body h3 {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.detail-kv strong.mono-value {
+  font-family: var(--font-mono);
+}
+
+.plugin-detail-body h3 {
+  margin: 0 0 var(--space-2);
+  text-transform: uppercase;
+}
+
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.demo-box {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.demo-box p {
+  margin: 0;
+  color: var(--soft);
+}
+
+.about-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.about-stats span {
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.about-stats strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.density-compact .workspace {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  gap: var(--space-3);
+}
+
+.density-compact .topbar {
+  min-height: 78px;
+}
+
+.density-compact .hero-strip {
+  gap: var(--space-2);
+}
+
+.density-compact .kpi-grid,
+.density-compact .metric-strip {
+  gap: var(--space-2);
+}
+
+.density-compact .kpi-card {
+  min-height: 68px;
+  padding: var(--space-3);
+}
+
+.density-compact .kpi-card strong {
+  font-size: 21px;
+}
+
+.density-compact .dashboard-grid {
+  gap: var(--space-3);
+}
+
+.density-compact .surface-panel,
+.density-compact .setting-card {
+  padding: var(--space-3);
+}
+
+.density-compact .resource-list {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-2);
+}
+
+.density-compact .resource-row {
+  grid-template-rows: minmax(80px, 1fr) auto;
+  min-height: 120px;
+  border-radius: 10px;
+}
+
+.density-compact .resource-launch {
+  min-height: 80px;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+
+.density-compact .resource-icon,
+.density-compact .result-icon,
+.density-compact .status-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.density-compact .resource-icon img,
+.density-compact .result-icon img {
+  width: 24px;
+  height: 24px;
+}
+
+.density-compact .tile-actions button {
+  height: 30px;
+}
+
+.density-compact .operations-panel {
+  gap: var(--space-3);
+}
+
+.density-compact .wide-command {
+  min-height: 36px;
+}
+
+@keyframes backdrop-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes context-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 1120px) {
+  body {
+    min-width: 900px;
+  }
+
+  .dashboard-grid,
+  .settings-shell,
+  .settings-page-grid,
+  .management-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .wide-card,
+  .span-2 {
+    grid-column: auto;
+  }
+
+  .plugin-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .permission-row,
+  .plugin-card small {
+    grid-column: 1 / -1;
+  }
+
+  .kpi-grid,
+  .metric-strip,
+  .about-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+
+/* Atelier Zero (Warm Editorial) Theme Overrides */
+:root[data-theme="atelier-zero"] {
+  --elev-raised: 0 8px 24px rgba(32, 25, 20, 0.08);
+}
+
+/* 1. Typography */
+:root[data-theme="atelier-zero"] h1,
+:root[data-theme="atelier-zero"] h2,
+:root[data-theme="atelier-zero"] h3,
+:root[data-theme="atelier-zero"] .topbar h1,
+:root[data-theme="atelier-zero"] .setting-card h2,
+:root[data-theme="atelier-zero"] .panel-card h2,
+:root[data-theme="atelier-zero"] .modal-head h2,
+:root[data-theme="atelier-zero"] .kpi-card strong {
+  font-family: var(--font-title), Georgia, "Times New Roman", serif !important;
+}
+
+:root[data-theme="atelier-zero"] body,
+:root[data-theme="atelier-zero"] button,
+:root[data-theme="atelier-zero"] input,
+:root[data-theme="atelier-zero"] select,
+:root[data-theme="atelier-zero"] textarea {
+  font-family: var(--font-body), Inter, system-ui, sans-serif !important;
+}
+
+:root[data-theme="atelier-zero"] .brand-mark strong,
+:root[data-theme="atelier-zero"] .brand-mark span {
+  font-family: var(--font-body), Inter, sans-serif !important;
+}
+
+:root[data-theme="atelier-zero"] .eyebrow {
+  color: var(--accent) !important;
+  font-family: var(--font-ui), Inter, system-ui, sans-serif !important;
+}
+
+/* 2. Primary Buttons, Menu Items & Selected Tabs */
+:root[data-theme="atelier-zero"] .primary-action {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+  border: 1px solid var(--accent) !important;
+  box-shadow: none !important;
+  background-image: none !important;
+}
+
+:root[data-theme="atelier-zero"] .primary-action:hover {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+  border-color: var(--accent) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+:root[data-theme="atelier-zero"] .secondary-action,
+:root[data-theme="atelier-zero"] .wide-command {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-strong) !important;
+  color: var(--soft) !important;
+}
+
+:root[data-theme="atelier-zero"] .secondary-action:hover,
+:root[data-theme="atelier-zero"] .wide-command:hover {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--accent) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="atelier-zero"] .danger-action {
+  background: var(--danger) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--danger) !important;
+}
+
+:root[data-theme="atelier-zero"] .group-tabs button {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+
+:root[data-theme="atelier-zero"] .group-tabs button.selected {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
+}
+
+:root[data-theme="atelier-zero"] .settings-menu button.active {
+  background: var(--surface-soft) !important;
+  color: var(--accent) !important;
+}
+
+:root[data-theme="atelier-zero"] .rail-button.active {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-strong) !important;
+  color: var(--accent) !important;
+}
+
+/* Hover behaviors for rail, menu, and group tab buttons */
+:root[data-theme="atelier-zero"] .rail-button:hover,
+:root[data-theme="atelier-zero"] .settings-menu button:hover,
+:root[data-theme="atelier-zero"] .group-tabs button:hover:not(.selected) {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+  border-color: var(--line-strong) !important;
+}
+
+:root[data-theme="atelier-zero"] .window-controls button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+/* 3. Division Borders & Cards Style */
+:root[data-theme="atelier-zero"] .sidebar {
+  background: var(--bg) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="atelier-zero"] .mini-panel {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+}
+
+:root[data-theme="atelier-zero"] .kpi-card,
+:root[data-theme="atelier-zero"] .surface-panel,
+:root[data-theme="atelier-zero"] .setting-card,
+:root[data-theme="atelier-zero"] .panel-card,
+:root[data-theme="atelier-zero"] .status-card,
+:root[data-theme="atelier-zero"] .settings-menu,
+:root[data-theme="atelier-zero"] .about-stats span,
+:root[data-theme="atelier-zero"] .demo-box,
+:root[data-theme="atelier-zero"] .resource-row,
+:root[data-theme="atelier-zero"] .toast-line,
+:root[data-theme="atelier-zero"] .batch-toolbar {
+  border: 1px solid var(--line) !important;
+  box-shadow: none !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="atelier-zero"] .kpi-card,
+:root[data-theme="atelier-zero"] .surface-panel {
+  border: 1px solid var(--line-strong) !important;
+  background: var(--surface) !important;
+}
+
+/* 4. Hover card style for resource-row */
+:root[data-theme="atelier-zero"] .resource-row:hover {
+  background: var(--surface) !important;
+  border-color: var(--accent-2) !important;
+  box-shadow: var(--elev-raised) !important;
+}
+
+:root[data-theme="atelier-zero"] .resource-row.selected {
+  border-color: var(--accent-2) !important;
+}
+
+/* 5. Inputs & Fields styling */
+:root[data-theme="atelier-zero"] .setting-list input,
+:root[data-theme="atelier-zero"] .setting-list select,
+:root[data-theme="atelier-zero"] .form-grid input,
+:root[data-theme="atelier-zero"] .form-grid select,
+:root[data-theme="atelier-zero"] .form-grid textarea,
+:root[data-theme="atelier-zero"] .backup-panel textarea,
+:root[data-theme="atelier-zero"] .dialog-body input,
+:root[data-theme="atelier-zero"] .dialog-body select {
+  border: 1px solid var(--line) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="atelier-zero"] .search-shell {
+  border: 1px solid var(--line-strong) !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="atelier-zero"] .search-shell:focus-within {
+  border-color: var(--accent) !important;
+}
+
+:root[data-theme="atelier-zero"] kbd {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--muted) !important;
+}
+
+:root[data-theme="atelier-zero"] input:focus-visible,
+:root[data-theme="atelier-zero"] select:focus-visible,
+:root[data-theme="atelier-zero"] textarea:focus-visible {
+  outline: 1px solid var(--line-focus) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+:root[data-theme="atelier-zero"] option {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+/* 6. Icons & brand mark adjustments */
+:root[data-theme="atelier-zero"] .brand-orbit {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--accent) !important;
+}
+
+:root[data-theme="atelier-zero"] .resource-icon,
+:root[data-theme="atelier-zero"] .result-icon,
+:root[data-theme="atelier-zero"] .status-icon {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+  border: 1px solid var(--line-strong) !important;
+  color: var(--accent) !important;
+}
+
+:root[data-theme="atelier-zero"] .path-list code {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line-strong) !important;
+  color: var(--text) !important;
+}
+
+/* 7. Purge local-galaxy decoration assets completely */
+:root[data-theme="atelier-zero"] .topbar::after,
+:root[data-theme="atelier-zero"] .search-shell::before,
+:root[data-theme="atelier-zero"] .group-tabs button.selected::before,
+:root[data-theme="atelier-zero"] .primary-action::after,
+:root[data-theme="atelier-zero"] .status-card::after,
+:root[data-theme="atelier-zero"] .settings-menu::after,
+:root[data-theme="atelier-zero"] .logs-panel::before,
+:root[data-theme="atelier-zero"] .resource-panel::after,
+:root[data-theme="atelier-zero"] .setting-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* ==========================================
+   CREATIVE MODE THEME (NEO-BRUTALIST STYLE)
+   ========================================== */
+
+/* 1. Typography Overrides */
+:root[data-theme="creative-mode"] h1,
+:root[data-theme="creative-mode"] h2,
+:root[data-theme="creative-mode"] h3,
+:root[data-theme="creative-mode"] .topbar h1,
+:root[data-theme="creative-mode"] .setting-card h2,
+:root[data-theme="creative-mode"] .panel-card h2,
+:root[data-theme="creative-mode"] .modal-head h2 {
+  font-family: var(--font-title), "Archivo Black", Impact, sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
+  font-weight: 900 !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] .kpi-card strong {
+  font-family: var(--font-title), "Archivo Black", Impact, sans-serif !important;
+  font-weight: 900 !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] body,
+:root[data-theme="creative-mode"] button,
+:root[data-theme="creative-mode"] input,
+:root[data-theme="creative-mode"] select,
+:root[data-theme="creative-mode"] textarea {
+  font-family: var(--font-body), Inter, system-ui, sans-serif !important;
+}
+
+:root[data-theme="creative-mode"] .brand-mark strong,
+:root[data-theme="creative-mode"] .brand-mark span {
+  font-family: var(--font-body), Inter, sans-serif !important;
+}
+
+:root[data-theme="creative-mode"] .eyebrow {
+  color: var(--accent-3) !important;
+  font-family: var(--font-mono), monospace !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* 2. Global Containers & Cards (Borders & Shadows) */
+:root[data-theme="creative-mode"] .sidebar {
+  background: var(--bg) !important;
+  border-right: 2px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="creative-mode"] .kpi-card,
+:root[data-theme="creative-mode"] .surface-panel,
+:root[data-theme="creative-mode"] .setting-card,
+:root[data-theme="creative-mode"] .panel-card,
+:root[data-theme="creative-mode"] .status-card,
+:root[data-theme="creative-mode"] .settings-menu,
+:root[data-theme="creative-mode"] .about-stats span,
+:root[data-theme="creative-mode"] .demo-box,
+:root[data-theme="creative-mode"] .resource-row,
+:root[data-theme="creative-mode"] .toast-line,
+:root[data-theme="creative-mode"] .batch-toolbar {
+  border: 2px solid var(--line) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface) !important;
+  transition: transform 100ms var(--ease-standard), box-shadow 100ms var(--ease-standard) !important;
+}
+
+:root[data-theme="creative-mode"] .mini-panel {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .mini-panel strong {
+  color: var(--accent-3) !important;
+  font-family: var(--font-mono), monospace !important;
+}
+
+/* 3. Interactive Cards Hover & Tactile Press */
+:root[data-theme="creative-mode"] .resource-row:hover {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  box-shadow: 6px 6px 0px var(--line) !important;
+  transform: translate(-2px, -2px) !important;
+}
+
+:root[data-theme="creative-mode"] .resource-row:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .resource-row.selected {
+  border-color: var(--accent-3) !important;
+  background: var(--surface-soft) !important;
+}
+
+/* 4. Action Buttons & Input Elements */
+:root[data-theme="creative-mode"] .primary-action {
+  background: var(--accent-2) !important; /* Pink */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  text-shadow: none !important;
+  background-image: none !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .primary-action:hover {
+  background: var(--accent-2) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="creative-mode"] .primary-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .secondary-action,
+:root[data-theme="creative-mode"] .wide-command {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .secondary-action:hover,
+:root[data-theme="creative-mode"] .wide-command:hover {
+  background: var(--surface-soft) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] .secondary-action:active,
+:root[data-theme="creative-mode"] .wide-command:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .danger-action {
+  background: var(--danger) !important; /* Orange/Red */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .danger-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  font-weight: 700 !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button:hover {
+  background: var(--surface-soft) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button.on {
+  background: var(--accent) !important; /* Green */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button.on:hover {
+  background: var(--accent) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button.on:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+
+/* 5. Navigation Rails, Group Tabs & Menu Buttons */
+:root[data-theme="creative-mode"] .group-tabs button {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  margin-right: 8px !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .group-tabs button:hover:not(.selected) {
+  background: var(--surface-soft) !important;
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .group-tabs button.selected {
+  background: var(--accent-2) !important; /* Pink */
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  transform: translate(2px, 2px) !important;
+}
+
+:root[data-theme="creative-mode"] .settings-menu button.active {
+  background: var(--accent) !important; /* Green */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="creative-mode"] .rail-button.active {
+  background: var(--accent) !important; /* Green */
+  border: 2px solid var(--line) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="creative-mode"] .rail-button:hover,
+:root[data-theme="creative-mode"] .settings-menu button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+  border: 2px solid var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .window-controls button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+/* 6. Inputs & Search Fields */
+:root[data-theme="creative-mode"] .setting-list input,
+:root[data-theme="creative-mode"] .setting-list select,
+:root[data-theme="creative-mode"] .form-grid input,
+:root[data-theme="creative-mode"] .form-grid select,
+:root[data-theme="creative-mode"] .form-grid textarea,
+:root[data-theme="creative-mode"] .backup-panel textarea,
+:root[data-theme="creative-mode"] .dialog-body input,
+:root[data-theme="creative-mode"] .dialog-body select {
+  border: 2px solid var(--line) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="creative-mode"] .search-shell {
+  border: 2px solid var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="creative-mode"] .search-shell:focus-within {
+  border-color: var(--line-focus) !important; /* Orange */
+}
+
+:root[data-theme="creative-mode"] kbd {
+  background: var(--surface-soft) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] input:focus-visible,
+:root[data-theme="creative-mode"] select:focus-visible,
+:root[data-theme="creative-mode"] textarea:focus-visible {
+  outline: 2px solid var(--line-focus) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+:root[data-theme="creative-mode"] option {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+/* 7. Brand Orbit, Icons & Utilities */
+:root[data-theme="creative-mode"] .brand-orbit {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--accent-3) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .resource-icon,
+:root[data-theme="creative-mode"] .result-icon,
+:root[data-theme="creative-mode"] .status-icon {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+  border: 2px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="creative-mode"] .path-list code {
+  background: var(--surface-soft) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+/* 8. Purge local-galaxy decoration assets completely */
+:root[data-theme="creative-mode"] .topbar::after,
+:root[data-theme="creative-mode"] .search-shell::before,
+:root[data-theme="creative-mode"] .group-tabs button.selected::before,
+:root[data-theme="creative-mode"] .primary-action::after,
+:root[data-theme="creative-mode"] .status-card::after,
+:root[data-theme="creative-mode"] .settings-menu::after,
+:root[data-theme="creative-mode"] .logs-panel::before,
+:root[data-theme="creative-mode"] .resource-panel::after,
+:root[data-theme="creative-mode"] .setting-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* ==========================================
+   GLOBAL SETTINGS MODAL CONTAINER
+   ========================================== */
+.settings-modal-panel {
+  width: min(960px, calc(100vw - 32px)) !important;
+  height: min(700px, calc(100vh - 32px)) !important;
+  max-width: 95vw !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* ==========================================
+   CREATIVE MODE RED/GREEN & SPACING ENHANCEMENTS
+   ========================================== */
+
+/* Spacing between "详情" and "停用/启用" switch button */
+:root[data-theme="creative-mode"] .switch-button {
+  margin-left: 12px !important;
+}
+
+/* Settings Modal Overrides */
+:root[data-theme="creative-mode"] .settings-modal-panel {
+  border: 2px solid var(--line) !important;
+  box-shadow: var(--shadow-elevated) !important;
+  background: var(--bg) !important;
+  border-radius: var(--radius) !important;
+}
+
+/* Red/Green Scrollbar Styling */
+:root[data-theme="creative-mode"] ::-webkit-scrollbar-thumb {
+  background: var(--accent) !important; /* Green scrollbar */
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="creative-mode"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-2) !important; /* Pink scrollbar on hover */
+}
+
+/* KPI Card Number Color Rotation */
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(1) strong {
+  color: var(--accent-2) !important; /* Pink/Red for total resources */
+}
+
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(2) strong {
+  color: var(--accent) !important; /* Green for enabled plugins */
+}
+
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(3) strong {
+  color: var(--accent-3) !important; /* Orange/Red for logs/warnings */
+}
+
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(4) strong {
+  color: var(--warning) !important; /* Yellow for others */
+}
+
+/* Brand logo and text color adjustments */
+:root[data-theme="creative-mode"] .brand-orbit {
+  background: var(--accent-2) !important; /* Pink background for logo */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .brand-mark span {
+  color: var(--accent) !important; /* Green subtitle "Desktop" */
+  font-weight: 800 !important;
+}
+
+/* Favorite stars color in main interface */
+:root[data-theme="creative-mode"] .favorite-action.is-favorite {
+  color: var(--accent-2) !important; /* Pink favorite star */
+}
+
+/* Hovering resource icons triggers pink background micro-animation */
+:root[data-theme="creative-mode"] .resource-row:hover .resource-icon {
+  background: var(--accent-2) !important; /* Pink */
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+}
+
+/* Creative Mode Card hover state color change */
+:root[data-theme="creative-mode"] .resource-row:hover {
+  background: #f7f0d5 !important;
+}
+
+/* Creative Mode action buttons hover states */
+:root[data-theme="creative-mode"] .tile-actions button {
+  border-right: 2px solid var(--line) !important;
+  color: var(--line) !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+:root[data-theme="creative-mode"] .tile-actions button:hover {
+  color: #ffffff !important;
+}
+:root[data-theme="creative-mode"] .tile-actions button:nth-child(1):hover {
+  background: var(--warning) !important; /* Yellow for favorite */
+  color: #000000 !important;
+}
+:root[data-theme="creative-mode"] .tile-actions button:nth-child(2):hover {
+  background: var(--accent) !important; /* Green for edit */
+}
+:root[data-theme="creative-mode"] .tile-actions button:nth-child(3):hover {
+  background: var(--danger) !important; /* Red/Orange for delete */
+}
+
+/* ==========================================
+   GLOBAL ENGINE PLUGIN DISABLED STYLING
+   ========================================== */
+.plugin-card.is-disabled {
+  opacity: 0.55 !important;
+  border-style: dashed !important;
+  transition: opacity 160ms ease, border-style 160ms ease !important;
+}
+
+.plugin-card.is-disabled .switch-button {
+  border-style: solid !important;
+}
+
+/* ==========================================
+   AURORA FOCUS THEME (GROVE ORGANIC STYLE)
+   ========================================== */
+
+/* 1. Typography Overrides */
+:root[data-theme="aurora-focus"] h1,
+:root[data-theme="aurora-focus"] h2,
+:root[data-theme="aurora-focus"] h3,
+:root[data-theme="aurora-focus"] .topbar h1,
+:root[data-theme="aurora-focus"] .setting-card h2,
+:root[data-theme="aurora-focus"] .panel-card h2,
+:root[data-theme="aurora-focus"] .modal-head h2 {
+  font-family: var(--font-title), Georgia, "Playfair Display", serif !important;
+  letter-spacing: 0.01em !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="aurora-focus"] .kpi-card strong {
+  font-family: var(--font-title), Georgia, serif !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="aurora-focus"] body,
+:root[data-theme="aurora-focus"] button,
+:root[data-theme="aurora-focus"] input,
+:root[data-theme="aurora-focus"] select,
+:root[data-theme="aurora-focus"] textarea {
+  font-family: var(--font-body), Inter, system-ui, sans-serif !important;
+}
+
+:root[data-theme="aurora-focus"] .brand-mark strong,
+:root[data-theme="aurora-focus"] .brand-mark span {
+  font-family: var(--font-body), Inter, sans-serif !important;
+}
+
+:root[data-theme="aurora-focus"] .eyebrow {
+  color: var(--accent) !important;
+  font-family: var(--font-ui), sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+}
+
+/* 2. Containers & Cards (Borders & Shadows) */
+:root[data-theme="aurora-focus"] .sidebar {
+  background: var(--bg-deep) !important;
+  border-right: 1px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="aurora-focus"] .kpi-card,
+:root[data-theme="aurora-focus"] .surface-panel,
+:root[data-theme="aurora-focus"] .setting-card,
+:root[data-theme="aurora-focus"] .panel-card,
+:root[data-theme="aurora-focus"] .status-card,
+:root[data-theme="aurora-focus"] .settings-menu,
+:root[data-theme="aurora-focus"] .about-stats span,
+:root[data-theme="aurora-focus"] .demo-box,
+:root[data-theme="aurora-focus"] .resource-row,
+:root[data-theme="aurora-focus"] .toast-line,
+:root[data-theme="aurora-focus"] .batch-toolbar {
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface) !important;
+}
+
+:root[data-theme="aurora-focus"] .mini-panel {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="aurora-focus"] .mini-panel strong {
+  color: var(--accent) !important;
+  font-family: var(--font-mono), monospace !important;
+}
+
+/* 3. Interactive Cards Hover & Selected States */
+:root[data-theme="aurora-focus"] .resource-row:hover {
+  background: var(--surface-2) !important;
+  border-color: var(--line-strong) !important;
+}
+
+:root[data-theme="aurora-focus"] .resource-row.selected {
+  border-color: var(--accent) !important;
+  background: var(--surface-3) !important;
+}
+
+/* 4. Action Buttons & Input Elements */
+:root[data-theme="aurora-focus"] .primary-action {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--accent) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  background-image: none !important;
+  transition: background 120ms ease, border-color 120ms ease !important;
+}
+
+:root[data-theme="aurora-focus"] .primary-action:hover {
+  background: #a8422d !important;
+  border-color: #a8422d !important;
+}
+
+:root[data-theme="aurora-focus"] .primary-action:active {
+  background: #8e3523 !important;
+  border-color: #8e3523 !important;
+}
+
+:root[data-theme="aurora-focus"] .secondary-action,
+:root[data-theme="aurora-focus"] .wide-command {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line-strong) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease !important;
+}
+
+:root[data-theme="aurora-focus"] .secondary-action:hover,
+:root[data-theme="aurora-focus"] .wide-command:hover {
+  background: var(--surface-3) !important;
+  border-color: var(--accent) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="aurora-focus"] .secondary-action:active,
+:root[data-theme="aurora-focus"] .wide-command:active {
+  background: var(--surface-soft) !important;
+}
+
+:root[data-theme="aurora-focus"] .danger-action {
+  background: var(--danger) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--danger) !important;
+}
+
+:root[data-theme="aurora-focus"] .danger-action:hover {
+  background: #a8422d !important;
+  border-color: #a8422d !important;
+}
+
+:root[data-theme="aurora-focus"] .switch-button {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--soft) !important;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease !important;
+}
+
+:root[data-theme="aurora-focus"] .switch-button:hover {
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="aurora-focus"] .switch-button.on {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--accent) !important;
+}
+
+:root[data-theme="aurora-focus"] .switch-button.on:hover {
+  background: #a8422d !important;
+  border-color: #a8422d !important;
+}
+
+/* Spacing between "详情" and "停用/启用" switch button */
+:root[data-theme="aurora-focus"] .switch-button {
+  margin-left: 12px !important;
+}
+
+/* 5. Navigation Rails, Group Tabs & Menu Buttons */
+:root[data-theme="aurora-focus"] .group-tabs button {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--soft) !important;
+  margin-right: 8px !important;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease !important;
+}
+
+:root[data-theme="aurora-focus"] .group-tabs button:hover:not(.selected) {
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="aurora-focus"] .group-tabs button.selected {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
+}
+
+:root[data-theme="aurora-focus"] .settings-menu button.active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--accent) !important;
+}
+
+:root[data-theme="aurora-focus"] .rail-button.active {
+  background: var(--accent) !important;
+  border: 1px solid var(--accent) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="aurora-focus"] .rail-button:hover,
+:root[data-theme="aurora-focus"] .settings-menu button:hover {
+  background: var(--surface-2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+}
+
+:root[data-theme="aurora-focus"] .window-controls button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+/* 6. Inputs & Search Fields */
+:root[data-theme="aurora-focus"] .setting-list input,
+:root[data-theme="aurora-focus"] .setting-list select,
+:root[data-theme="aurora-focus"] .form-grid input,
+:root[data-theme="aurora-focus"] .form-grid select,
+:root[data-theme="aurora-focus"] .form-grid textarea,
+:root[data-theme="aurora-focus"] .backup-panel textarea,
+:root[data-theme="aurora-focus"] .dialog-body input,
+:root[data-theme="aurora-focus"] .dialog-body select {
+  border: 1px solid var(--line) !important;
+  background: var(--field) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="aurora-focus"] .search-shell {
+  border: 1px solid var(--line) !important;
+  background: var(--field) !important;
+  box-shadow: none !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="aurora-focus"] .search-shell:focus-within {
+  border-color: var(--accent) !important;
+}
+
+:root[data-theme="aurora-focus"] kbd {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="aurora-focus"] input:focus-visible,
+:root[data-theme="aurora-focus"] select:focus-visible,
+:root[data-theme="aurora-focus"] textarea:focus-visible {
+  outline: 1px solid var(--accent) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+:root[data-theme="aurora-focus"] option {
+  background: var(--bg-deep) !important;
+  color: var(--text) !important;
+}
+
+/* 7. Brand, Icons & Utilities */
+:root[data-theme="aurora-focus"] .brand-orbit {
+  background: var(--surface-2) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--accent) !important;
+}
+
+:root[data-theme="aurora-focus"] .brand-mark span {
+  color: var(--accent) !important;
+  font-weight: 600 !important;
+}
+
+:root[data-theme="aurora-focus"] .resource-icon,
+:root[data-theme="aurora-focus"] .result-icon,
+:root[data-theme="aurora-focus"] .status-icon {
+  background: var(--surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--line) !important;
+  color: var(--accent) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="aurora-focus"] .path-list code {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+/* 8. Purge local-galaxy decoration assets completely */
+:root[data-theme="aurora-focus"] .topbar::after,
+:root[data-theme="aurora-focus"] .search-shell::before,
+:root[data-theme="aurora-focus"] .group-tabs button.selected::before,
+:root[data-theme="aurora-focus"] .primary-action::after,
+:root[data-theme="aurora-focus"] .status-card::after,
+:root[data-theme="aurora-focus"] .settings-menu::after,
+:root[data-theme="aurora-focus"] .logs-panel::before,
+:root[data-theme="aurora-focus"] .resource-panel::after,
+:root[data-theme="aurora-focus"] .setting-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* 9. Settings Modal Panel Overrides */
+:root[data-theme="aurora-focus"] .settings-modal-panel {
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-elevated) !important;
+  background: var(--bg) !important;
+  border-radius: var(--radius) !important;
+}
+
+/* 10. Scrollbar overrides */
+:root[data-theme="aurora-focus"] ::-webkit-scrollbar-thumb {
+  background: var(--accent) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="aurora-focus"] ::-webkit-scrollbar-thumb:hover {
+  background: #a8422d !important;
+}
+
+/* 11. KPI counters color mapping */
+:root[data-theme="aurora-focus"] .kpi-grid .kpi-card:nth-child(1) strong {
+  color: var(--accent) !important; /* Rust red */
+}
+
+:root[data-theme="aurora-focus"] .kpi-grid .kpi-card:nth-child(2) strong {
+  color: var(--ok) !important; /* Green */
+}
+
+:root[data-theme="aurora-focus"] .kpi-grid .kpi-card:nth-child(3) strong {
+  color: var(--warning) !important; /* Gold */
+}
+
+:root[data-theme="aurora-focus"] .kpi-grid .kpi-card:nth-child(4) strong {
+  color: var(--muted) !important;
+}
+
+/* 12. Favorite stars color */
+:root[data-theme="aurora-focus"] .favorite-action.is-favorite {
+  color: var(--accent) !important;
+}
+
+/* 13. Hover icon micro-animation */
+:root[data-theme="aurora-focus"] .resource-row:hover .resource-icon {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--accent) !important;
+}
+
+/* ==========================================
+   PEOPLE'S PLATFORM THEME (ACTIVE POSTER STYLE)
+   ========================================== */
+
+/* 1. Typography Overrides */
+:root[data-theme="ink-blue"] h1,
+:root[data-theme="ink-blue"] h2,
+:root[data-theme="ink-blue"] h3,
+:root[data-theme="ink-blue"] .setting-card h2,
+:root[data-theme="ink-blue"] .panel-card h2,
+:root[data-theme="ink-blue"] .modal-head h2 {
+  font-family: var(--font-title), "Alfa Slab One", Impact, sans-serif !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.03em !important;
+  text-shadow: 2px 2px 0 var(--accent-2) !important; /* Red offset shadow */
+  color: var(--accent) !important; /* Orange text */
+}
+
+:root[data-theme="ink-blue"] .topbar h1 {
+  color: var(--accent-3) !important; /* Royal Blue */
+  text-shadow: 2px 2px 0 var(--accent) !important; /* Orange shadow */
+}
+
+:root[data-theme="ink-blue"] .kpi-card strong {
+  font-family: var(--font-title), "Alfa Slab One", Impact, sans-serif !important;
+  font-weight: 900 !important;
+  text-shadow: 2px 2px 0 var(--accent-2) !important;
+  color: var(--accent) !important;
+}
+
+:root[data-theme="ink-blue"] body,
+:root[data-theme="ink-blue"] button,
+:root[data-theme="ink-blue"] input,
+:root[data-theme="ink-blue"] select,
+:root[data-theme="ink-blue"] textarea {
+  font-family: var(--font-body), Inter, system-ui, sans-serif !important;
+}
+
+:root[data-theme="ink-blue"] .brand-mark strong,
+:root[data-theme="ink-blue"] .brand-mark span {
+  font-family: var(--font-body), Inter, sans-serif !important;
+}
+
+:root[data-theme="ink-blue"] .eyebrow {
+  font-family: "Caveat", cursive !important;
+  font-size: 1.35rem !important;
+  font-weight: 700 !important;
+  color: var(--accent) !important;
+  text-transform: none !important;
+  letter-spacing: 0.02em !important;
+  margin-bottom: 2px !important;
+}
+
+/* 2. Containers & Cards (Borders & Shadows) */
+:root[data-theme="ink-blue"] .sidebar {
+  background: var(--bg-deep) !important; /* Cream */
+  border-right: 2px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="ink-blue"] .sidebar .rail-button {
+  color: var(--line) !important; /* Dark charcoal text */
+}
+
+/* Base layouts (Cream background) */
+:root[data-theme="ink-blue"] .surface-panel,
+:root[data-theme="ink-blue"] .settings-modal-panel,
+:root[data-theme="ink-blue"] .settings-menu {
+  border: 2px solid var(--line) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+  background: var(--bg-deep) !important; /* Cream */
+  color: var(--line) !important; /* Charcoal text */
+}
+
+/* Ensure settings modal wrapper is centered with cream base */
+:root[data-theme="ink-blue"] .settings-modal-panel {
+  background: var(--bg) !important;
+  box-shadow: var(--shadow-elevated) !important;
+}
+
+/* Titles inside cream containers (Royal Blue with orange text shadow) */
+:root[data-theme="ink-blue"] .surface-panel h2,
+:root[data-theme="ink-blue"] .settings-modal-panel h2,
+:root[data-theme="ink-blue"] .settings-modal-panel .modal-head h2 {
+  color: var(--accent-3) !important; /* Royal Blue */
+  text-shadow: 2px 2px 0 var(--accent) !important; /* Orange shadow */
+}
+
+/* Muted text inside cream containers */
+:root[data-theme="ink-blue"] .surface-panel p,
+:root[data-theme="ink-blue"] .surface-panel span,
+:root[data-theme="ink-blue"] .surface-panel small,
+:root[data-theme="ink-blue"] .settings-modal-panel p,
+:root[data-theme="ink-blue"] .settings-modal-panel span,
+:root[data-theme="ink-blue"] .settings-modal-panel small,
+:root[data-theme="ink-blue"] .settings-modal-panel .eyebrow {
+  color: var(--line) !important;
+  opacity: 0.8 !important;
+}
+
+:root[data-theme="ink-blue"] .settings-modal-panel .eyebrow {
+  opacity: 1 !important;
+  font-family: "Caveat", cursive !important;
+  color: var(--accent) !important;
+}
+
+/* Card panels (Royal Blue background) */
+:root[data-theme="ink-blue"] .kpi-card,
+:root[data-theme="ink-blue"] .setting-card,
+:root[data-theme="ink-blue"] .panel-card,
+:root[data-theme="ink-blue"] .status-card,
+:root[data-theme="ink-blue"] .about-stats span,
+:root[data-theme="ink-blue"] .demo-box,
+:root[data-theme="ink-blue"] .resource-row,
+:root[data-theme="ink-blue"] .toast-line,
+:root[data-theme="ink-blue"] .batch-toolbar {
+  border: 2px solid var(--line) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface) !important; /* Royal Blue */
+  color: var(--text) !important;
+}
+
+:root[data-theme="ink-blue"] .setting-card p,
+:root[data-theme="ink-blue"] .panel-card p,
+:root[data-theme="ink-blue"] .status-card p,
+:root[data-theme="ink-blue"] .plugin-card span,
+:root[data-theme="ink-blue"] .plugin-card small,
+:root[data-theme="ink-blue"] .kpi-card em,
+:root[data-theme="ink-blue"] .about-stats em {
+  color: var(--soft) !important; /* Cream text */
+  opacity: 1 !important;
+}
+
+:root[data-theme="ink-blue"] .mini-panel {
+  background: var(--bg-deep) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .mini-panel strong {
+  color: var(--accent-2) !important; /* Red counter */
+  font-family: var(--font-mono), monospace !important;
+}
+
+/* 3. Interactive Cards Hover & Tactile Press */
+/* Hovering card pops up to cream with royal blue/charcoal text and red offset shadow */
+:root[data-theme="ink-blue"] .resource-row:hover {
+  background: var(--bg) !important;
+  border-color: var(--line) !important;
+  color: var(--line) !important;
+  box-shadow: 6px 6px 0px var(--accent-2) !important; /* Red shadow */
+  transform: translate(-2px, -2px) !important;
+}
+
+:root[data-theme="ink-blue"] .resource-row:hover strong {
+  color: var(--accent-3) !important; /* Royal blue */
+}
+
+:root[data-theme="ink-blue"] .resource-row:hover small,
+:root[data-theme="ink-blue"] .resource-row:hover em {
+  color: var(--line) !important; /* Charcoal */
+}
+
+:root[data-theme="ink-blue"] .resource-row:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .resource-row.selected {
+  border-color: var(--accent) !important;
+  background: var(--surface-2) !important;
+}
+
+/* Card Action Buttons styling inside card */
+:root[data-theme="ink-blue"] .tile-actions {
+  border-top: 2px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+:root[data-theme="ink-blue"] .tile-actions button {
+  border-right: 2px solid rgba(255, 255, 255, 0.15) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+
+:root[data-theme="ink-blue"] .tile-actions button:last-child {
+  border-right-color: transparent !important;
+}
+
+/* Card Action Buttons styling inside card (hovered card) */
+:root[data-theme="ink-blue"] .resource-row:hover .tile-actions {
+  border-top-color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .resource-row:hover .tile-actions button {
+  border-right-color: var(--line) !important;
+  color: var(--line) !important;
+}
+
+/* Individual card action button hover glow states */
+:root[data-theme="ink-blue"] .tile-actions button:nth-child(1):hover {
+  background: var(--accent) !important; /* Orange */
+  color: #ffffff !important;
+}
+
+:root[data-theme="ink-blue"] .tile-actions button:nth-child(2):hover {
+  background: #facc15 !important; /* Gold */
+  color: #ffffff !important;
+}
+
+:root[data-theme="ink-blue"] .tile-actions button:nth-child(3):hover {
+  background: var(--accent-2) !important; /* Red */
+  color: #ffffff !important;
+}
+
+/* 4. Action Buttons & Input Elements */
+:root[data-theme="ink-blue"] .primary-action {
+  background: var(--accent) !important; /* Orange */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 3px 3px 0px var(--accent-2) !important; /* Red shadow */
+  text-shadow: none !important;
+  background-image: none !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="ink-blue"] .primary-action:hover {
+  background: var(--accent) !important;
+  box-shadow: 4px 4px 0px var(--accent-2) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="ink-blue"] .primary-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--accent-2) !important;
+}
+
+:root[data-theme="ink-blue"] .secondary-action,
+:root[data-theme="ink-blue"] .wide-command {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="ink-blue"] .secondary-action svg,
+:root[data-theme="ink-blue"] .wide-command svg,
+:root[data-theme="ink-blue"] .wide-command::after {
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .secondary-action:hover,
+:root[data-theme="ink-blue"] .wide-command:hover {
+  background: var(--bg) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .secondary-action:hover svg,
+:root[data-theme="ink-blue"] .wide-command:hover svg,
+:root[data-theme="ink-blue"] .wide-command:hover::after {
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .secondary-action:active,
+:root[data-theme="ink-blue"] .wide-command:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .secondary-action:disabled,
+:root[data-theme="ink-blue"] .wide-command:disabled {
+  opacity: 0.4 !important;
+}
+
+:root[data-theme="ink-blue"] .danger-action {
+  background: var(--danger) !important; /* Red */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .danger-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .switch-button {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  font-weight: 700 !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="ink-blue"] .switch-button:hover {
+  background: var(--bg) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="ink-blue"] .switch-button:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .switch-button.on {
+  background: var(--accent) !important; /* Orange */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 3px 3px 0px var(--accent-2) !important; /* Red shadow */
+}
+
+:root[data-theme="ink-blue"] .switch-button.on:hover {
+  background: var(--accent) !important;
+  box-shadow: 4px 4px 0px var(--accent-2) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="ink-blue"] .switch-button.on:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--accent-2) !important;
+}
+
+:root[data-theme="ink-blue"] .switch-button {
+  margin-left: 12px !important;
+}
+
+/* 5. Navigation Rails, Group Tabs & Menu Buttons */
+:root[data-theme="ink-blue"] .group-tabs button {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--line) !important;
+  margin-right: 8px !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="ink-blue"] .group-tabs button:hover:not(.selected) {
+  background: var(--bg) !important;
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .group-tabs button.selected {
+  background: var(--accent) !important; /* Orange */
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  transform: translate(2px, 2px) !important;
+}
+
+:root[data-theme="ink-blue"] .settings-menu button {
+  color: var(--line) !important; /* Charcoal on cream settings rail */
+}
+
+:root[data-theme="ink-blue"] .settings-menu button.active {
+  background: var(--accent) !important; /* Orange */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="ink-blue"] .rail-button.active {
+  background: var(--accent-3) !important; /* Royal Blue */
+  border: 2px solid var(--line) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="ink-blue"] .rail-button:hover,
+:root[data-theme="ink-blue"] .settings-menu button:hover {
+  background: rgba(24, 24, 26, 0.08) !important;
+}
+
+:root[data-theme="ink-blue"] .window-controls button {
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .window-controls button:hover {
+  background: rgba(24, 24, 26, 0.08) !important;
+}
+
+/* 6. Inputs & Search Fields */
+:root[data-theme="ink-blue"] .setting-list input,
+:root[data-theme="ink-blue"] .setting-list select,
+:root[data-theme="ink-blue"] .form-grid input,
+:root[data-theme="ink-blue"] .form-grid select,
+:root[data-theme="ink-blue"] .form-grid textarea,
+:root[data-theme="ink-blue"] .backup-panel textarea,
+:root[data-theme="ink-blue"] .dialog-body input,
+:root[data-theme="ink-blue"] .dialog-body select {
+  border: 2px solid var(--line) !important;
+  background: #ffffff !important;
+  color: var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="ink-blue"] .search-shell {
+  border: 2px solid var(--line) !important;
+  background: #ffffff !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="ink-blue"] .search-shell:focus-within {
+  border-color: var(--accent) !important;
+}
+
+:root[data-theme="ink-blue"] kbd {
+  background: var(--bg) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] input:focus-visible,
+:root[data-theme="ink-blue"] select:focus-visible,
+:root[data-theme="ink-blue"] textarea:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+:root[data-theme="ink-blue"] option {
+  background: #ffffff !important;
+  color: #18181a !important;
+}
+
+/* 7. Brand, Icons & Utilities */
+:root[data-theme="ink-blue"] .brand-orbit {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  color: var(--accent-3) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .brand-mark strong {
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .brand-mark span {
+  color: var(--accent-3) !important; /* Royal Blue */
+  font-weight: 800 !important;
+}
+
+:root[data-theme="ink-blue"] .resource-icon,
+:root[data-theme="ink-blue"] .result-icon,
+:root[data-theme="ink-blue"] .status-icon {
+  background: #ffffff !important;
+  background-image: none !important;
+  border: 2px solid var(--line) !important;
+  color: var(--accent-3) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .path-list code {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .context-menu button {
+  color: var(--line) !important;
+}
+
+/* 8. Purge local-galaxy decoration assets completely */
+:root[data-theme="ink-blue"] .topbar::after,
+:root[data-theme="ink-blue"] .search-shell::before,
+:root[data-theme="ink-blue"] .group-tabs button.selected::before,
+:root[data-theme="ink-blue"] .primary-action::after,
+:root[data-theme="ink-blue"] .status-card::after,
+:root[data-theme="ink-blue"] .settings-menu::after,
+:root[data-theme="ink-blue"] .logs-panel::before,
+:root[data-theme="ink-blue"] .resource-panel::after,
+:root[data-theme="ink-blue"] .setting-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* 9. Settings Modal Panel Overrides */
+:root[data-theme="ink-blue"] .settings-modal-panel {
+  background: var(--accent-3) !important; /* Royal Blue */
+  border: 2px solid var(--line) !important;
+  color: #ffffff !important; /* White text on blue settings */
+  box-shadow: 8px 8px 0 var(--accent-2) !important; /* Red offset shadow */
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="ink-blue"] .settings-page-grid p,
+:root[data-theme="ink-blue"] .settings-page-grid span,
+:root[data-theme="ink-blue"] .about-stats span,
+:root[data-theme="ink-blue"] .theme-card small,
+:root[data-theme="ink-blue"] .setting-card p {
+  color: var(--soft) !important; /* Cream text on blue settings */
+}
+
+/* 10. Scrollbar overrides */
+:root[data-theme="ink-blue"] ::-webkit-scrollbar-thumb {
+  background: var(--accent) !important; /* Orange scrollbar */
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="ink-blue"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-2) !important; /* Red on hover */
+}
+
+/* 11. KPI counters color mapping */
+:root[data-theme="ink-blue"] .kpi-grid .kpi-card:nth-child(1) strong {
+  color: var(--accent) !important; /* Orange */
+}
+
+:root[data-theme="ink-blue"] .kpi-grid .kpi-card:nth-child(2) strong {
+  color: #ffffff !important;
+}
+
+:root[data-theme="ink-blue"] .kpi-grid .kpi-card:nth-child(3) strong {
+  color: var(--accent-2) !important; /* Red */
+}
+
+:root[data-theme="ink-blue"] .kpi-grid .kpi-card:nth-child(4) strong {
+  color: var(--accent) !important;
+}
+
+/* 12. Favorite stars color */
+:root[data-theme="ink-blue"] .favorite-action.is-favorite {
+  color: var(--accent) !important; /* Orange favorite star */
+}
+
+/* 13. Hover icon micro-animation */
+:root[data-theme="ink-blue"] .resource-row:hover .resource-icon {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+}
+
+
+/* ==========================================
+   ZENTOU WIREFRAME THEME (orbit-dark)
+   ========================================== */
+
+/* 1. Global Background Grid & Typography */
+:root[data-theme="orbit-dark"] body,
+:root[data-theme="orbit-dark"] .app-shell,
+:root[data-theme="orbit-dark"] .sidebar {
+  background-color: var(--bg) !important;
+  background-image: 
+    linear-gradient(rgba(180, 150, 120, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 150, 120, 0.07) 1px, transparent 1px) !important;
+  background-size: 20px 20px !important;
+}
+
+:root[data-theme="orbit-dark"] h1,
+:root[data-theme="orbit-dark"] h2,
+:root[data-theme="orbit-dark"] h3,
+:root[data-theme="orbit-dark"] .topbar h1,
+:root[data-theme="orbit-dark"] .setting-card h2,
+:root[data-theme="orbit-dark"] .panel-card h2,
+:root[data-theme="orbit-dark"] .modal-head h2 {
+  font-family: var(--font-title), "Playfair Display", Georgia, serif !important;
+  font-weight: 700 !important;
+  font-style: italic !important;
+  color: var(--text) !important;
+  letter-spacing: 0.01em !important;
+  text-shadow: none !important;
+}
+
+:root[data-theme="orbit-dark"] body,
+:root[data-theme="orbit-dark"] button,
+:root[data-theme="orbit-dark"] input,
+:root[data-theme="orbit-dark"] select,
+:root[data-theme="orbit-dark"] textarea {
+  font-family: var(--font-body), Inter, system-ui, sans-serif !important;
+}
+
+:root[data-theme="orbit-dark"] .eyebrow {
+  font-family: "Caveat", cursive !important;
+  font-weight: 700 !important;
+  font-size: 1.2rem !important;
+  color: var(--accent) !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* 2. Double-line Topbar & Decorators Purge */
+:root[data-theme="orbit-dark"] .topbar {
+  border-bottom: 4px double var(--line) !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+:root[data-theme="orbit-dark"] .topbar::after,
+:root[data-theme="orbit-dark"] .search-shell::before,
+:root[data-theme="orbit-dark"] .group-tabs button.selected::before,
+:root[data-theme="orbit-dark"] .primary-action::after,
+:root[data-theme="orbit-dark"] .status-card::after,
+:root[data-theme="orbit-dark"] .settings-menu::after,
+:root[data-theme="orbit-dark"] .logs-panel::before,
+:root[data-theme="orbit-dark"] .resource-panel::after,
+:root[data-theme="orbit-dark"] .setting-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* 3. Cards & Containers */
+:root[data-theme="orbit-dark"] .kpi-card,
+:root[data-theme="orbit-dark"] .surface-panel,
+:root[data-theme="orbit-dark"] .setting-card,
+:root[data-theme="orbit-dark"] .panel-card,
+:root[data-theme="orbit-dark"] .status-card,
+:root[data-theme="orbit-dark"] .settings-menu,
+:root[data-theme="orbit-dark"] .about-stats span,
+:root[data-theme="orbit-dark"] .demo-box,
+:root[data-theme="orbit-dark"] .resource-row,
+:root[data-theme="orbit-dark"] .toast-line,
+:root[data-theme="orbit-dark"] .batch-toolbar {
+  border: 1px solid var(--line) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface) !important;
+  transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease !important;
+}
+
+:root[data-theme="orbit-dark"] .mini-panel {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+/* 4. Tabs & Sidebar Buttons (Marker Highlighter) */
+:root[data-theme="orbit-dark"] .group-tabs button {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  margin-right: 8px !important;
+  transition: all 120ms ease !important;
+}
+
+:root[data-theme="orbit-dark"] .group-tabs button:hover:not(.selected) {
+  background: #fdf6cf !important;
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .group-tabs button.selected {
+  background: var(--accent-2) !important; /* Yellow marker */
+  color: #1a1a1a !important;
+  border: 2px solid var(--line) !important;
+  border-style: double !important;
+  box-shadow: none !important;
+  transform: translate(1px, 1px) !important;
+}
+
+:root[data-theme="orbit-dark"] .settings-menu button.active {
+  background: var(--accent-2) !important;
+  color: #1a1a1a !important;
+  border: 2px solid var(--line) !important;
+  border-style: double !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="orbit-dark"] .rail-button.active {
+  background: var(--accent) !important; /* Orange-red select marker */
+  border: 1px solid var(--line) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="orbit-dark"] .rail-button:hover,
+:root[data-theme="orbit-dark"] .settings-menu button:hover {
+  background: #fdf6cf !important;
+  color: var(--text) !important;
+  border: 1px solid var(--line) !important;
+}
+
+/* 5. Resource Rows Hover Details */
+:root[data-theme="orbit-dark"] .resource-row:hover {
+  background: #fdf6cf !important;
+  border-color: var(--line) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-2px, -2px) !important;
+}
+
+:root[data-theme="orbit-dark"] .resource-row:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .resource-row.selected {
+  border-color: var(--accent) !important;
+  background: #fdf2b8 !important;
+}
+
+:root[data-theme="orbit-dark"] .resource-row:hover .resource-icon {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+}
+
+/* 6. Buttons & Inputs */
+:root[data-theme="orbit-dark"] .primary-action {
+  background: var(--accent) !important; /* Orange-red */
+  color: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  text-shadow: none !important;
+  background-image: none !important;
+  font-weight: 700 !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="orbit-dark"] .primary-action:hover {
+  background: var(--accent) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="orbit-dark"] .primary-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .secondary-action,
+:root[data-theme="orbit-dark"] .wide-command {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="orbit-dark"] .secondary-action:hover,
+:root[data-theme="orbit-dark"] .wide-command:hover {
+  background: #fdf6cf !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="orbit-dark"] .secondary-action:active,
+:root[data-theme="orbit-dark"] .wide-command:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .danger-action {
+  background: var(--danger) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .danger-action:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .switch-button {
+  background: var(--surface) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  font-weight: 700 !important;
+  margin-left: 12px !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="orbit-dark"] .switch-button:hover {
+  background: #fdf6cf !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="orbit-dark"] .switch-button:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .switch-button.on {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .switch-button.on:hover {
+  background: var(--accent) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+/* 7. Search shell & Dialog fields */
+:root[data-theme="orbit-dark"] .setting-list input,
+:root[data-theme="orbit-dark"] .setting-list select,
+:root[data-theme="orbit-dark"] .form-grid input,
+:root[data-theme="orbit-dark"] .form-grid select,
+:root[data-theme="orbit-dark"] .form-grid textarea,
+:root[data-theme="orbit-dark"] .backup-panel textarea,
+:root[data-theme="orbit-dark"] .dialog-body input,
+:root[data-theme="orbit-dark"] .dialog-body select {
+  border: 1px solid var(--line) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="orbit-dark"] .search-shell {
+  border: 1px solid var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="orbit-dark"] .search-shell:focus-within {
+  border-color: var(--line-focus) !important;
+}
+
+:root[data-theme="orbit-dark"] kbd {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="orbit-dark"] input:focus-visible,
+:root[data-theme="orbit-dark"] select:focus-visible,
+:root[data-theme="orbit-dark"] textarea:focus-visible {
+  outline: 2px solid var(--line-focus) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+:root[data-theme="orbit-dark"] option {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+/* 8. Brand & Icons */
+:root[data-theme="orbit-dark"] .brand-orbit {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="orbit-dark"] .resource-icon,
+:root[data-theme="orbit-dark"] .result-icon,
+:root[data-theme="orbit-dark"] .status-icon {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="orbit-dark"] .path-list code {
+  background: var(--surface-soft) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+/* 9. Settings Modal & Custom Scrollbar */
+:root[data-theme="orbit-dark"] .settings-modal-panel {
+  border: 4px double var(--line) !important;
+  box-shadow: var(--shadow-elevated) !important;
+  background-color: var(--bg) !important;
+  background-image: 
+    linear-gradient(rgba(180, 150, 120, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(180, 150, 120, 0.07) 1px, transparent 1px) !important;
+  background-size: 20px 20px !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="orbit-dark"] ::-webkit-scrollbar-thumb {
+  background: var(--accent) !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="orbit-dark"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-2) !important;
+}
+
+/* 10. KPI Cards (Post-it / Sticky Notes Style) */
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card {
+  border: 1px solid var(--line) !important;
+  border-radius: 2px !important;
+  transition: transform 150ms ease, box-shadow 150ms ease !important;
+}
+
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(1) {
+  background: #fdf5c1 !important; /* Yellow */
+  transform: rotate(-1.5deg) !important;
+  box-shadow: 3px 3px 0px rgba(26,26,26,0.12) !important;
+}
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(1) strong {
+  color: #b86b13 !important;
+}
+
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(2) {
+  background: #e1f5fe !important; /* Blue */
+  transform: rotate(1.2deg) !important;
+  box-shadow: 3px 3px 0px rgba(26,26,26,0.12) !important;
+}
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(2) strong {
+  color: #0284c7 !important;
+}
+
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(3) {
+  background: #ffcdd2 !important; /* Pink */
+  transform: rotate(-2deg) !important;
+  box-shadow: 3px 3px 0px rgba(26,26,26,0.12) !important;
+}
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(3) strong {
+  color: #c73f5c !important;
+}
+
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(4) {
+  background: #f0f4c3 !important; /* Lime */
+  transform: rotate(0.8deg) !important;
+  box-shadow: 3px 3px 0px rgba(26,26,26,0.12) !important;
+}
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:nth-child(4) strong {
+  color: #7c8520 !important;
+}
+
+:root[data-theme="orbit-dark"] .kpi-grid .kpi-card:hover {
+  transform: scale(1.03) rotate(0deg) !important;
+  box-shadow: 5px 5px 0px rgba(26,26,26,0.18) !important;
+  z-index: 10 !important;
+}
+
+/* 11. Favorite & Card Action Button Hovers */
+:root[data-theme="orbit-dark"] .favorite-action.is-favorite {
+  color: var(--accent-2) !important; /* Yellow marker */
+}
+
+:root[data-theme="orbit-dark"] .tile-actions button {
+  border-right: 1px solid var(--line) !important;
+  color: var(--line) !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+:root[data-theme="orbit-dark"] .tile-actions button:hover {
+  color: #ffffff !important;
+}
+:root[data-theme="orbit-dark"] .tile-actions button:nth-child(1):hover {
+  background: var(--accent-2) !important;
+  color: #000000 !important;
+}
+:root[data-theme="orbit-dark"] .tile-actions button:nth-child(2):hover {
+  background: var(--teal) !important;
+}
+:root[data-theme="orbit-dark"] .tile-actions button:nth-child(3):hover {
+  background: var(--danger) !important;
+}
+
+
+/* ==========================================
+   THEMED CONTEXT MENUS (右键小菜单适配)
+   ========================================== */
+
+/* 1. Atelier Zero 主题右键菜单 */
+:root[data-theme="atelier-zero"] .context-menu {
+  background: #fffdf8 !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 0 8px 24px rgba(32, 25, 20, 0.08) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root[data-theme="atelier-zero"] .context-menu button {
+  color: var(--text) !important;
+  font-family: var(--font-body), Inter, sans-serif !important;
+  border-radius: 4px !important;
+}
+:root[data-theme="atelier-zero"] .context-menu button:hover:not(:disabled) {
+  background: var(--surface-soft) !important;
+  color: var(--accent) !important;
+}
+:root[data-theme="atelier-zero"] .context-menu button:disabled {
+  color: var(--muted) !important;
+  opacity: 0.45 !important;
+}
+:root[data-theme="atelier-zero"] .context-menu .context-separator {
+  background: var(--line) !important;
+  height: 1px !important;
+  margin: 4px 0 !important;
+}
+
+/* 2. Creative Mode 主题右键菜单 */
+:root[data-theme="creative-mode"] .context-menu {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root[data-theme="creative-mode"] .context-menu button {
+  color: var(--text) !important;
+  font-family: var(--font-body), Inter, sans-serif !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-sm) !important;
+}
+:root[data-theme="creative-mode"] .context-menu button:hover:not(:disabled) {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+:root[data-theme="creative-mode"] .context-menu button:disabled {
+  color: var(--muted) !important;
+  opacity: 0.55 !important;
+}
+:root[data-theme="creative-mode"] .context-menu .context-separator {
+  background: var(--line) !important;
+  height: 2px !important;
+  margin: 4px 0 !important;
+}
+
+/* 3. People's Platform / Ink Blue 主题右键菜单 */
+:root[data-theme="ink-blue"] .context-menu {
+  background: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root[data-theme="ink-blue"] .context-menu button {
+  color: var(--line) !important;
+  font-family: var(--font-body), Inter, sans-serif !important;
+  font-weight: 700 !important;
+  border-radius: var(--radius-sm) !important;
+}
+:root[data-theme="ink-blue"] .context-menu button:hover:not(:disabled) {
+  background: var(--bg-deep) !important;
+  color: var(--line) !important;
+}
+:root[data-theme="ink-blue"] .context-menu button:disabled {
+  color: var(--line) !important;
+  opacity: 0.35 !important;
+}
+:root[data-theme="ink-blue"] .context-menu .context-separator {
+  background: var(--line) !important;
+  height: 2px !important;
+  margin: 4px 0 !important;
+}
+
+/* 4. Zentou Wireframe / Orbit Dark 主题右键菜单 */
+:root[data-theme="orbit-dark"] .context-menu {
+  background: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+:root[data-theme="orbit-dark"] .context-menu button {
+  color: var(--text) !important;
+  font-family: var(--font-body), Inter, sans-serif !important;
+  border-radius: var(--radius-sm) !important;
+}
+:root[data-theme="orbit-dark"] .context-menu button:hover:not(:disabled) {
+  background: #fdf6cf !important; /* Marker Yellow */
+  color: var(--text) !important;
+}
+:root[data-theme="orbit-dark"] .context-menu button:disabled {
+  color: var(--muted) !important;
+  opacity: 0.45 !important;
+}
+:root[data-theme="orbit-dark"] .context-menu .context-separator {
+  background: var(--line) !important;
+  height: 1px !important;
+  margin: 4px 0 !important;
+}
+
+/* 5. 通用轻量/扁平主题自适应右键菜单 (sky-blue, mint-light, graphite-light, aurora-focus) */
+:root[data-theme="sky-blue"] .context-menu,
+:root[data-theme="mint-light"] .context-menu,
+:root[data-theme="graphite-light"] .context-menu,
+:root[data-theme="aurora-focus"] .context-menu {
+  background: var(--surface) !important;
+  border: 1px solid var(--line-strong) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+:root[data-theme="sky-blue"] .context-menu button,
+:root[data-theme="mint-light"] .context-menu button,
+:root[data-theme="graphite-light"] .context-menu button,
+:root[data-theme="aurora-focus"] .context-menu button {
+  color: var(--text) !important;
+  font-family: var(--font-body), Inter, sans-serif !important;
+}
+
+:root[data-theme="sky-blue"] .context-menu button:hover:not(:disabled),
+:root[data-theme="mint-light"] .context-menu button:hover:not(:disabled),
+:root[data-theme="graphite-light"] .context-menu button:hover:not(:disabled),
+:root[data-theme="aurora-focus"] .context-menu button:hover:not(:disabled) {
+  background: var(--surface-soft) !important;
+  color: var(--accent) !important;
+}
+
+:root[data-theme="sky-blue"] .context-menu button:disabled,
+:root[data-theme="mint-light"] .context-menu button:disabled,
+:root[data-theme="graphite-light"] .context-menu button:disabled,
+:root[data-theme="aurora-focus"] .context-menu button:disabled {
+  color: var(--muted) !important;
+  opacity: 0.45 !important;
+}
+
+:root[data-theme="sky-blue"] .context-menu .context-separator,
+:root[data-theme="mint-light"] .context-menu .context-separator,
+:root[data-theme="graphite-light"] .context-menu .context-separator,
+:root[data-theme="aurora-focus"] .context-menu .context-separator {
+  background: var(--line) !important;
+  height: 1px !important;
+  margin: 4px 0 !important;
+}
+
+
+
+

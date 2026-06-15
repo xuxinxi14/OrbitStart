@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "generatedFor": "OrbitStart 0.4.0",
+  "plugins": [
+    {
+      "id": "hello-command",
+      "name": "Hello Command",
+      "version": "0.1.0",
+      "source": "../plugins/hello-command",
+      "permissions": ["ui:toast"]
+    }
+  ]
+}

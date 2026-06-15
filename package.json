@@ -1,0 +1,32 @@
+{
+  "name": "orbitstart",
+  "version": "0.4.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 1420",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 1421",
+    "package:plugin": "powershell -ExecutionPolicy Bypass -File tools/package-plugin.ps1",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "test:e2e": "playwright test tests/basic.spec.ts",
+    "test:e2e:themes": "playwright test tests/atelier-zero.spec.ts",
+    "test:custom": "node tests/custom-harness.cjs"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "@tauri-apps/cli": "^2.8.4",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
