@@ -39,6 +39,36 @@ test.describe('OrbitStart E2E Basic Verification', () => {
     expect(styles.fontUi).not.toBe('');
   });
 
+  test('should show one resource under multiple group tabs', async ({ page }) => {
+    await page.evaluate(() => {
+      window.localStorage.setItem('orbitstart.browser.items', JSON.stringify([
+        {
+          id: 'multi-group-test',
+          title: 'Multi Group Test',
+          subtitle: 'Shared by two workflows',
+          kind: 'app',
+          group: 'apps,work',
+          target: 'C:\\Test\\multi-group.exe',
+          aliases: ['multi-group'],
+          tags: ['workflow-a', 'workflow-b'],
+          icon: 'AppWindow',
+          accent: '#5cc8ff',
+          favorite: false,
+          launchCount: 0
+        }
+      ]));
+    });
+
+    await page.reload();
+    await page.waitForSelector('.app-shell', { timeout: 10000 });
+
+    await page.locator('.group-tabs button').nth(1).click();
+    await expect(page.locator('.resource-row').filter({ hasText: 'Multi Group Test' })).toBeVisible();
+
+    await page.locator('.group-tabs button').nth(2).click();
+    await expect(page.locator('.resource-row').filter({ hasText: 'Multi Group Test' })).toBeVisible();
+  });
+
   test('should navigate to Settings and inspect settings view', async ({ page }) => {
     const settingsButton = page.locator('.rail-button[title="设置"]').first();
     await expect(settingsButton).toBeVisible();

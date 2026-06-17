@@ -18,7 +18,7 @@ use tauri::{
 };
 
 #[cfg(desktop)]
-use tauri_plugin_global_shortcut::{Code, Modifiers, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -197,19 +197,22 @@ fn app_data_dir() -> Result<PathBuf, String> {
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
     let path = base.join("OrbitStart");
-    fs::create_dir_all(&path).map_err(|error| format!("Failed to create data directory: {error}"))?;
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("Failed to create data directory: {error}"))?;
     Ok(path)
 }
 
 fn plugins_dir() -> Result<PathBuf, String> {
     let path = app_data_dir()?.join("plugins");
-    fs::create_dir_all(&path).map_err(|error| format!("Failed to create plugin directory: {error}"))?;
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("Failed to create plugin directory: {error}"))?;
     Ok(path)
 }
 
 fn themes_dir() -> Result<PathBuf, String> {
     let path = app_data_dir()?.join("themes");
-    fs::create_dir_all(&path).map_err(|error| format!("Failed to create theme directory: {error}"))?;
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("Failed to create theme directory: {error}"))?;
     Ok(path)
 }
 
@@ -218,7 +221,10 @@ fn db_path() -> Result<PathBuf, String> {
 }
 
 fn open_db() -> Result<Connection, String> {
-    let conn = Connection::open(db_path()?).map_err(|error| format!("Failed to open database: {error}"))?;
+    let conn = Connection::open(db_path()?)
+        .map_err(|error| format!("Failed to open database: {error}"))?;
+    // 设置 5 秒的繁忙超时，防止多线程同时访问数据库时抛出 "database is locked" 错误
+    let _ = conn.busy_timeout(std::time::Duration::from_secs(5));
     init_db(&conn)?;
     Ok(conn)
 }
@@ -312,10 +318,14 @@ fn ensure_default_settings(conn: &Connection) -> Result<(), String> {
 }
 
 fn setting(conn: &Connection, key: &str, fallback: &str) -> Result<String, String> {
-    conn.query_row("SELECT value FROM settings WHERE key = ?1", params![key], |row| row.get(0))
-        .optional()
-        .map_err(|error| format!("Failed to read setting {key}: {error}"))
-        .map(|value| value.unwrap_or_else(|| fallback.to_string()))
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|error| format!("Failed to read setting {key}: {error}"))
+    .map(|value| value.unwrap_or_else(|| fallback.to_string()))
 }
 
 fn set_setting_value(conn: &Connection, key: &str, value: &str) -> Result<(), String> {
@@ -382,7 +392,8 @@ fn seed_items() -> Vec<OrbitItemInput> {
             subtitle: "Launches a small starter chain".to_string(),
             kind: "action_chain".to_string(),
             group: "work".to_string(),
-            target: "C:\\Windows\\System32\\notepad.exe\nhttps://github.com\nE:\\OrbitStart".to_string(),
+            target: "C:\\Windows\\System32\\notepad.exe\nhttps://github.com\nE:\\OrbitStart"
+                .to_string(),
             aliases: vec!["chain".to_string(), "workspace".to_string()],
             tags: vec!["automation".to_string(), "template".to_string()],
             icon: "Workflow".to_string(),
@@ -394,12 +405,48 @@ fn seed_items() -> Vec<OrbitItemInput> {
 
 fn default_groups() -> Vec<OrbitGroup> {
     vec![
-        OrbitGroup { id: "all".to_string(), title: "全部".to_string(), icon: "Orbit".to_string(), description: "所有资源".to_string(), custom: false },
-        OrbitGroup { id: "apps".to_string(), title: "应用".to_string(), icon: "AppWindow".to_string(), description: "程序和快捷方式".to_string(), custom: false },
-        OrbitGroup { id: "work".to_string(), title: "工作区".to_string(), icon: "PanelsTopLeft".to_string(), description: "项目和动作链".to_string(), custom: false },
-        OrbitGroup { id: "web".to_string(), title: "网址".to_string(), icon: "Globe".to_string(), description: "网站、书签和在线控制台".to_string(), custom: false },
-        OrbitGroup { id: "scripts".to_string(), title: "脚本".to_string(), icon: "TerminalSquare".to_string(), description: "脚本和自动化入口".to_string(), custom: false },
-        OrbitGroup { id: "plugins".to_string(), title: "插件".to_string(), icon: "Blocks".to_string(), description: "插件提供的资源".to_string(), custom: false },
+        OrbitGroup {
+            id: "all".to_string(),
+            title: "全部".to_string(),
+            icon: "Orbit".to_string(),
+            description: "所有资源".to_string(),
+            custom: false,
+        },
+        OrbitGroup {
+            id: "apps".to_string(),
+            title: "应用".to_string(),
+            icon: "AppWindow".to_string(),
+            description: "程序和快捷方式".to_string(),
+            custom: false,
+        },
+        OrbitGroup {
+            id: "work".to_string(),
+            title: "工作区".to_string(),
+            icon: "PanelsTopLeft".to_string(),
+            description: "项目和动作链".to_string(),
+            custom: false,
+        },
+        OrbitGroup {
+            id: "web".to_string(),
+            title: "网址".to_string(),
+            icon: "Globe".to_string(),
+            description: "网站、书签和在线控制台".to_string(),
+            custom: false,
+        },
+        OrbitGroup {
+            id: "scripts".to_string(),
+            title: "脚本".to_string(),
+            icon: "TerminalSquare".to_string(),
+            description: "脚本和自动化入口".to_string(),
+            custom: false,
+        },
+        OrbitGroup {
+            id: "plugins".to_string(),
+            title: "插件".to_string(),
+            icon: "Blocks".to_string(),
+            description: "插件提供的资源".to_string(),
+            custom: false,
+        },
     ]
 }
 
@@ -452,11 +499,20 @@ fn all_groups(conn: &Connection) -> Result<Vec<OrbitGroup>, String> {
 }
 
 fn permission(id: &str, label: &str, risk: &str) -> PluginPermission {
-    PluginPermission { id: id.to_string(), label: label.to_string(), risk: risk.to_string() }
+    PluginPermission {
+        id: id.to_string(),
+        label: label.to_string(),
+        risk: risk.to_string(),
+    }
 }
 
 fn contributes(commands: u32, search_providers: u32, themes: u32, views: u32) -> PluginContributes {
-    PluginContributes { commands, search_providers, themes, views }
+    PluginContributes {
+        commands,
+        search_providers,
+        themes,
+        views,
+    }
 }
 
 fn plugin(
@@ -515,7 +571,11 @@ fn default_plugins() -> Vec<PluginManifest> {
             "core-bookmarks",
             "Browser Bookmarks",
             "从 Edge/Chrome 书签文件导入网站入口。",
-            vec![permission("fs:read-browser", "读取本机浏览器书签文件", "medium")],
+            vec![permission(
+                "fs:read-browser",
+                "读取本机浏览器书签文件",
+                "medium",
+            )],
             contributes(1, 1, 0, 0),
         ),
         plugin(
@@ -584,7 +644,12 @@ fn seed_plugin_states(conn: &Connection) -> Result<(), String> {
                 builtin = excluded.builtin,
                 updated_at = excluded.updated_at
             "#,
-            params![plugin.id, if plugin.enabled { 1 } else { 0 }, manifest_json, now],
+            params![
+                plugin.id,
+                if plugin.enabled { 1 } else { 0 },
+                manifest_json,
+                now
+            ],
         )
         .map_err(|error| format!("Failed to seed plugin state: {error}"))?;
     }
@@ -612,7 +677,11 @@ fn read_local_plugin_manifests() -> Result<Vec<PluginManifest>, String> {
                 manifests.push(manifest);
             }
             Err(error) => {
-                let _ = log_plugin_event_raw("plugin-loader", "error", &format!("Invalid plugin manifest {}: {error}", path.display()));
+                let _ = log_plugin_event_raw(
+                    "plugin-loader",
+                    "error",
+                    &format!("Invalid plugin manifest {}: {error}", path.display()),
+                );
             }
         }
     }
@@ -657,44 +726,119 @@ fn all_plugins(conn: &Connection) -> Result<Vec<PluginManifest>, String> {
 }
 
 fn plugin_enabled(plugins: &[PluginManifest], id: &str) -> bool {
-    plugins.iter().any(|plugin| plugin.id == id && plugin.enabled)
+    plugins
+        .iter()
+        .any(|plugin| plugin.id == id && plugin.enabled)
 }
 
 fn default_commands(plugins: &[PluginManifest]) -> Vec<OrbitCommand> {
     let mut commands = Vec::new();
-    let mut push = |plugin_id: &str, id: &str, title: &str, subtitle: &str, icon: &str, keywords: &[&str]| {
-        if plugin_enabled(plugins, plugin_id) {
-            commands.push(OrbitCommand {
-                id: id.to_string(),
-                title: title.to_string(),
-                subtitle: subtitle.to_string(),
-                plugin_id: plugin_id.to_string(),
-                icon: icon.to_string(),
-                keywords: keywords.iter().map(|keyword| keyword.to_string()).collect(),
-            });
-        }
-    };
+    let mut push =
+        |plugin_id: &str, id: &str, title: &str, subtitle: &str, icon: &str, keywords: &[&str]| {
+            if plugin_enabled(plugins, plugin_id) {
+                commands.push(OrbitCommand {
+                    id: id.to_string(),
+                    title: title.to_string(),
+                    subtitle: subtitle.to_string(),
+                    plugin_id: plugin_id.to_string(),
+                    icon: icon.to_string(),
+                    keywords: keywords.iter().map(|keyword| keyword.to_string()).collect(),
+                });
+            }
+        };
 
-    push("core-items", "core.addItem", "添加资源", "添加应用、文件、文件夹、网址、脚本或动作链", "PlusCircle", &["add", "new", "import"]);
-    push("core-actions", "core.addActionChain", "新建动作链", "用多行目标创建一个工作区启动链", "Workflow", &["chain", "workspace", "automation"]);
-    push("core-shortcuts", "core.scanShortcuts", "扫描桌面和开始菜单", "导入 Windows .lnk 快捷方式", "ScanSearch", &["scan", "shortcut"]);
-    push("core-bookmarks", "core.scanBookmarks", "导入浏览器书签", "扫描 Edge 和 Chrome 书签", "Bookmark", &["bookmark", "browser", "edge", "chrome"]);
-    push("core-backup", "core.exportJson", "导出 JSON", "导出本地资源、插件状态和主题设置", "Download", &["export", "backup"]);
-    push("core-themes", "core.themeStudio", "打开主题工作室", "选择主题并实时预览变量", "Palette", &["theme", "style"]);
-    push("core-plugin-dev", "core.createPluginTemplate", "创建插件模板", "在本地插件目录生成 Hello Command 模板", "FileCode2", &["plugin", "template", "sdk"]);
-    push("core-plugin-dev", "core.openDataDir", "打开数据目录", "查看数据库、插件、主题和备份文件", "FolderOpen", &["data", "plugins", "themes"]);
-    push("core-command-palette", "core.commandPalette", "打开命令面板", "统一搜索资源、命令和插件结果", "Search", &["search", "command"]);
+    push(
+        "core-items",
+        "core.addItem",
+        "添加资源",
+        "添加应用、文件、文件夹、网址、脚本或动作链",
+        "PlusCircle",
+        &["add", "new", "import"],
+    );
+    push(
+        "core-actions",
+        "core.addActionChain",
+        "新建动作链",
+        "用多行目标创建一个工作区启动链",
+        "Workflow",
+        &["chain", "workspace", "automation"],
+    );
+    push(
+        "core-shortcuts",
+        "core.scanShortcuts",
+        "扫描桌面和开始菜单",
+        "导入 Windows .lnk 快捷方式",
+        "ScanSearch",
+        &["scan", "shortcut"],
+    );
+    push(
+        "core-bookmarks",
+        "core.scanBookmarks",
+        "导入浏览器书签",
+        "扫描 Edge 和 Chrome 书签",
+        "Bookmark",
+        &["bookmark", "browser", "edge", "chrome"],
+    );
+    push(
+        "core-backup",
+        "core.exportJson",
+        "导出 JSON",
+        "导出本地资源、插件状态和主题设置",
+        "Download",
+        &["export", "backup"],
+    );
+    push(
+        "core-themes",
+        "core.themeStudio",
+        "打开主题工作室",
+        "选择主题并实时预览变量",
+        "Palette",
+        &["theme", "style"],
+    );
+    push(
+        "core-plugin-dev",
+        "core.createPluginTemplate",
+        "创建插件模板",
+        "在本地插件目录生成 Hello Command 模板",
+        "FileCode2",
+        &["plugin", "template", "sdk"],
+    );
+    push(
+        "core-plugin-dev",
+        "core.openDataDir",
+        "打开数据目录",
+        "查看数据库、插件、主题和备份文件",
+        "FolderOpen",
+        &["data", "plugins", "themes"],
+    );
+    push(
+        "core-command-palette",
+        "core.commandPalette",
+        "打开命令面板",
+        "统一搜索资源、命令和插件结果",
+        "Search",
+        &["search", "command"],
+    );
     commands
 }
 
-fn default_theme(id: &str, name: &str, author: &str, description: &str, tokens: &[(&str, &str)]) -> ThemeManifest {
+fn default_theme(
+    id: &str,
+    name: &str,
+    author: &str,
+    description: &str,
+    tokens: &[(&str, &str)],
+) -> ThemeManifest {
     ThemeManifest {
         id: id.to_string(),
         name: name.to_string(),
         author: author.to_string(),
         description: description.to_string(),
         builtin: true,
-        tokens: tokens.iter().map(|(key, value)| (key.to_string(), value.to_string())).collect(),
+        tokens: tokens
+            .iter()
+            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .collect(),
     }
 }
 
@@ -791,46 +935,6 @@ fn builtin_themes() -> Vec<ThemeManifest> {
             ],
         ),
         default_theme(
-            "graphite-light",
-            "Graphite Light",
-            "OrbitStart",
-            "浅色、低干扰，适合白天办公。",
-            &[
-                ("--font-ui", "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif"),
-                ("--font-title", "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif"),
-                ("--font-mono", "\"Cascadia Mono\", \"IBM Plex Mono\", \"Consolas\", monospace"),
-                ("--bg-deep", "#eceff3"),
-                ("--bg", "#f3f4f6"),
-                ("--app-bg", "rgba(244, 246, 248, 0.98)"),
-                ("--rail", "#f8fafc"),
-                ("--surface", "rgba(255, 255, 255, 0.94)"),
-                ("--surface-2", "rgba(255, 255, 255, 0.98)"),
-                ("--surface-3", "rgba(239, 242, 246, 0.96)"),
-                ("--surface-strong", "#ffffff"),
-                ("--surface-soft", "rgba(17, 24, 39, 0.035)"),
-                ("--field", "rgba(255, 255, 255, 0.78)"),
-                ("--field-strong", "#ffffff"),
-                ("--line", "rgba(22, 24, 29, 0.12)"),
-                ("--line-strong", "rgba(22, 24, 29, 0.18)"),
-                ("--line-focus", "rgba(20, 125, 115, 0.42)"),
-                ("--text", "#17191f"),
-                ("--soft", "rgba(23, 25, 31, 0.86)"),
-                ("--muted", "rgba(23, 25, 31, 0.72)"),
-                ("--gold", "#b86b13"),
-                ("--teal", "#147d73"),
-                ("--teal-soft", "#0f9f90"),
-                ("--danger", "#c73f5c"),
-                ("--accent", "#147d73"),
-                ("--accent-2", "#b86b13"),
-                ("--accent-3", "#c73f5c"),
-                ("--ok", "#3d7f2e"),
-                ("--warning", "#b86b13"),
-                ("--shadow-card", "0 14px 34px rgba(17, 24, 39, 0.08)"),
-                ("--shadow-elevated", "0 24px 90px rgba(17, 24, 39, 0.18)"),
-                ("--focus-ring", "0 0 0 3px rgba(20, 125, 115, 0.14)"),
-            ],
-        ),
-        default_theme(
             "ink-blue",
             "People's Platform",
             "OrbitStart",
@@ -873,83 +977,45 @@ fn builtin_themes() -> Vec<ThemeManifest> {
             ],
         ),
         default_theme(
-            "sky-blue",
-            "Sky Blue",
+            "creative-mode",
+            "Creative Mode",
             "OrbitStart",
-            "Bright blue desktop theme with clean white panels.",
+            "Bold Neo-Brutalist theme with confident multi-tone accents.",
             &[
-                ("--font-ui", "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif"),
-                ("--font-title", "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif"),
-                ("--font-mono", "\"Cascadia Mono\", \"IBM Plex Mono\", \"Consolas\", monospace"),
-                ("--bg-deep", "#dff2ff"),
-                ("--bg", "#eaf6ff"),
-                ("--app-bg", "rgba(234, 246, 255, 0.98)"),
-                ("--rail", "#f4fbff"),
-                ("--surface", "rgba(255, 255, 255, 0.94)"),
-                ("--surface-2", "rgba(245, 251, 255, 0.96)"),
-                ("--surface-3", "rgba(225, 241, 252, 0.95)"),
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "\"Archivo Black\", Impact, sans-serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#e8e3d3"),
+                ("--bg", "#f3efe0"),
+                ("--app-bg", "#f3efe0"),
+                ("--rail", "#f3efe0"),
+                ("--surface", "#ffffff"),
+                ("--surface-2", "#ece6d5"),
+                ("--surface-3", "#dcd6c5"),
                 ("--surface-strong", "#ffffff"),
-                ("--surface-soft", "rgba(15, 34, 52, 0.035)"),
-                ("--field", "rgba(255, 255, 255, 0.76)"),
+                ("--surface-soft", "#efe8d4"),
+                ("--field", "#ffffff"),
                 ("--field-strong", "#ffffff"),
-                ("--line", "rgba(20, 68, 102, 0.13)"),
-                ("--line-strong", "rgba(20, 68, 102, 0.2)"),
-                ("--line-focus", "rgba(2, 132, 199, 0.42)"),
-                ("--text", "#0f172a"),
-                ("--soft", "rgba(15, 23, 42, 0.86)"),
-                ("--muted", "rgba(15, 23, 42, 0.72)"),
-                ("--gold", "#b7791f"),
-                ("--teal", "#0284c7"),
-                ("--teal-soft", "#0ea5e9"),
-                ("--danger", "#dc4766"),
-                ("--accent", "#0284c7"),
-                ("--accent-2", "#b7791f"),
-                ("--accent-3", "#dc4766"),
-                ("--ok", "#15803d"),
-                ("--warning", "#b7791f"),
-                ("--shadow-card", "0 14px 34px rgba(14, 86, 132, 0.1)"),
-                ("--shadow-elevated", "0 24px 90px rgba(14, 86, 132, 0.2)"),
-                ("--focus-ring", "0 0 0 3px rgba(2, 132, 199, 0.14)"),
-            ],
-        ),
-        default_theme(
-            "mint-light",
-            "Mint Light",
-            "OrbitStart",
-            "Light green desktop theme with calm mint surfaces.",
-            &[
-                ("--font-ui", "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif"),
-                ("--font-title", "\"Segoe UI\", \"Microsoft YaHei UI\", \"Microsoft YaHei\", system-ui, sans-serif"),
-                ("--font-mono", "\"Cascadia Mono\", \"IBM Plex Mono\", \"Consolas\", monospace"),
-                ("--bg-deep", "#e3f8ec"),
-                ("--bg", "#ecfbf3"),
-                ("--app-bg", "rgba(236, 251, 243, 0.98)"),
-                ("--rail", "#f7fff9"),
-                ("--surface", "rgba(255, 255, 255, 0.94)"),
-                ("--surface-2", "rgba(247, 255, 251, 0.96)"),
-                ("--surface-3", "rgba(226, 246, 236, 0.95)"),
-                ("--surface-strong", "#ffffff"),
-                ("--surface-soft", "rgba(16, 38, 30, 0.035)"),
-                ("--field", "rgba(255, 255, 255, 0.76)"),
-                ("--field-strong", "#ffffff"),
-                ("--line", "rgba(22, 101, 52, 0.13)"),
-                ("--line-strong", "rgba(22, 101, 52, 0.2)"),
-                ("--line-focus", "rgba(5, 150, 105, 0.42)"),
-                ("--text", "#102018"),
-                ("--soft", "rgba(16, 32, 24, 0.86)"),
-                ("--muted", "rgba(16, 32, 24, 0.72)"),
-                ("--gold", "#a16207"),
-                ("--teal", "#059669"),
-                ("--teal-soft", "#10b981"),
-                ("--danger", "#be3a58"),
-                ("--accent", "#059669"),
-                ("--accent-2", "#a16207"),
-                ("--accent-3", "#be3a58"),
-                ("--ok", "#15803d"),
-                ("--warning", "#a16207"),
-                ("--shadow-card", "0 14px 34px rgba(22, 101, 52, 0.1)"),
-                ("--shadow-elevated", "0 24px 90px rgba(22, 101, 52, 0.2)"),
-                ("--focus-ring", "0 0 0 3px rgba(5, 150, 105, 0.14)"),
+                ("--line", "#000000"),
+                ("--line-strong", "#000000"),
+                ("--line-focus", "#e05929"),
+                ("--text", "#000000"),
+                ("--soft", "#222222"),
+                ("--muted", "#555555"),
+                ("--accent", "#1a8f53"),
+                ("--accent-2", "#ea5e98"),
+                ("--accent-3", "#e05929"),
+                ("--ok", "#1a8f53"),
+                ("--warning", "#f5b041"),
+                ("--danger", "#e05929"),
+                ("--radius-sm", "4px"),
+                ("--radius", "4px"),
+                ("--radius-md", "4px"),
+                ("--radius-lg", "4px"),
+                ("--shadow-card", "4px 4px 0px #000000"),
+                ("--shadow-elevated", "8px 8px 0px #000000"),
+                ("--focus-ring", "0 0 0 4px rgba(224, 89, 41, 0.24)"),
             ],
         ),
         default_theme(
@@ -995,45 +1061,423 @@ fn builtin_themes() -> Vec<ThemeManifest> {
             ],
         ),
         default_theme(
-            "creative-mode",
-            "Creative Mode",
+            "atelier-charcoal",
+            "Atelier Charcoal",
             "OrbitStart",
-            "Bold Neo-Brutalist theme with confident multi-tone accents.",
+            "Elegant graphite and charcoal-toned grey theme.",
             &[
                 ("--font-ui", "Inter, system-ui, sans-serif"),
                 ("--font-body", "Inter, system-ui, sans-serif"),
-                ("--font-title", "\"Archivo Black\", Impact, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
                 ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
-                ("--bg-deep", "#e8e3d3"),
-                ("--bg", "#f3efe0"),
-                ("--app-bg", "#f3efe0"),
-                ("--rail", "#f3efe0"),
-                ("--surface", "#ffffff"),
-                ("--surface-2", "#ece6d5"),
-                ("--surface-3", "#dcd6c5"),
+                ("--bg-deep", "#eceff3"),
+                ("--bg", "#eceff3"),
+                ("--app-bg", "#eceff3"),
+                ("--rail", "#eceff3"),
+                ("--surface", "#f5f7fa"),
+                ("--surface-2", "#e2e8f0"),
+                ("--surface-3", "#cbd5e1"),
                 ("--surface-strong", "#ffffff"),
-                ("--surface-soft", "#efe8d4"),
+                ("--surface-soft", "#e2e8f0"),
                 ("--field", "#ffffff"),
                 ("--field-strong", "#ffffff"),
-                ("--line", "#000000"),
-                ("--line-strong", "#000000"),
-                ("--line-focus", "#e05929"),
-                ("--text", "#000000"),
-                ("--soft", "#222222"),
-                ("--muted", "#555555"),
-                ("--accent", "#1a8f53"),
-                ("--accent-2", "#ea5e98"),
-                ("--accent-3", "#e05929"),
-                ("--ok", "#1a8f53"),
-                ("--warning", "#f5b041"),
-                ("--danger", "#e05929"),
-                ("--radius-sm", "4px"),
-                ("--radius", "4px"),
-                ("--radius-md", "4px"),
-                ("--radius-lg", "4px"),
-                ("--shadow-card", "4px 4px 0px #000000"),
-                ("--shadow-elevated", "8px 8px 0px #000000"),
-                ("--focus-ring", "0 0 0 4px rgba(224, 89, 41, 0.24)"),
+                ("--line", "#e2e8f0"),
+                ("--line-strong", "#cbd5e1"),
+                ("--line-focus", "#147d73"),
+                ("--text", "#17191f"),
+                ("--soft", "#475569"),
+                ("--muted", "#64748b"),
+                ("--accent", "#147d73"),
+                ("--accent-2", "#b86b13"),
+                ("--accent-3", "#c73f5c"),
+                ("--ok", "#3d7f2e"),
+                ("--warning", "#b86b13"),
+                ("--danger", "#c73f5c"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(23, 25, 31, 0.08)"),
+                ("--focus-ring", "0 0 0 4px rgba(20, 125, 115, 0.2)"),
+            ],
+        ),
+        default_theme(
+            "atelier-mint",
+            "Atelier Mint",
+            "OrbitStart",
+            "Quiet and refreshing mint-green editorial layout.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#e3f8ec"),
+                ("--bg", "#e3f8ec"),
+                ("--app-bg", "#e3f8ec"),
+                ("--rail", "#e3f8ec"),
+                ("--surface", "#f2fcf7"),
+                ("--surface-2", "#d1f2e1"),
+                ("--surface-3", "#b4e3cb"),
+                ("--surface-strong", "#ffffff"),
+                ("--surface-soft", "#d1f2e1"),
+                ("--field", "#f2fcf7"),
+                ("--field-strong", "#ffffff"),
+                ("--line", "#d1f2e1"),
+                ("--line-strong", "#b4e3cb"),
+                ("--line-focus", "#059669"),
+                ("--text", "#102018"),
+                ("--soft", "#2f4f3f"),
+                ("--muted", "#507563"),
+                ("--accent", "#059669"),
+                ("--accent-2", "#a16207"),
+                ("--accent-3", "#be3a58"),
+                ("--ok", "#15803d"),
+                ("--warning", "#a16207"),
+                ("--danger", "#be3a58"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(16, 32, 24, 0.08)"),
+                ("--focus-ring", "0 0 0 4px rgba(5, 150, 105, 0.2)"),
+            ],
+        ),
+        default_theme(
+            "atelier-sky",
+            "Atelier Sky",
+            "OrbitStart",
+            "Crisp and clear paper-sky blue layout.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#dff2ff"),
+                ("--bg", "#dff2ff"),
+                ("--app-bg", "#dff2ff"),
+                ("--rail", "#dff2ff"),
+                ("--surface", "#f0f8ff"),
+                ("--surface-2", "#cde7fc"),
+                ("--surface-3", "#b2dafa"),
+                ("--surface-strong", "#ffffff"),
+                ("--surface-soft", "#cde7fc"),
+                ("--field", "#f0f8ff"),
+                ("--field-strong", "#ffffff"),
+                ("--line", "#cde7fc"),
+                ("--line-strong", "#b2dafa"),
+                ("--line-focus", "#0284c7"),
+                ("--text", "#0f172a"),
+                ("--soft", "#334155"),
+                ("--muted", "#475569"),
+                ("--accent", "#0284c7"),
+                ("--accent-2", "#b7791f"),
+                ("--accent-3", "#dc4766"),
+                ("--ok", "#15803d"),
+                ("--warning", "#b7791f"),
+                ("--danger", "#dc4766"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(15, 23, 42, 0.08)"),
+                ("--focus-ring", "0 0 0 4px rgba(2, 132, 199, 0.2)"),
+            ],
+        ),
+        default_theme(
+            "atelier-pink",
+            "Atelier Pink",
+            "OrbitStart",
+            "Warm soft pinkish paper with rose-terracotta highlights.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#fcf5f7"),
+                ("--bg", "#fcf5f7"),
+                ("--app-bg", "#fcf5f7"),
+                ("--rail", "#fcf5f7"),
+                ("--surface", "#fff9fb"),
+                ("--surface-2", "#f2e1e5"),
+                ("--surface-3", "#e6cbd0"),
+                ("--surface-strong", "#ffffff"),
+                ("--surface-soft", "#f0e2e5"),
+                ("--field", "#fff9fb"),
+                ("--field-strong", "#ffffff"),
+                ("--line", "#f0e2e5"),
+                ("--line-strong", "#e6cbd0"),
+                ("--line-focus", "#c45873"),
+                ("--text", "#2b1b20"),
+                ("--soft", "#574046"),
+                ("--muted", "#826b71"),
+                ("--accent", "#c45873"),
+                ("--accent-2", "#3c645c"),
+                ("--accent-3", "#b53d3d"),
+                ("--ok", "#4fa375"),
+                ("--warning", "#cc8e35"),
+                ("--danger", "#b53d3d"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(43, 27, 32, 0.08)"),
+                ("--focus-ring", "0 0 0 4px rgba(196, 88, 115, 0.24)"),
+            ],
+        ),
+        default_theme(
+            "atelier-grey",
+            "Atelier Grey",
+            "OrbitStart",
+            "Quiet cool card grey with deep graphite highlights.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#f1f3f5"),
+                ("--bg", "#f1f3f5"),
+                ("--app-bg", "#f1f3f5"),
+                ("--rail", "#f1f3f5"),
+                ("--surface", "#fafbfc"),
+                ("--surface-2", "#e9ecef"),
+                ("--surface-3", "#dee2e6"),
+                ("--surface-strong", "#ffffff"),
+                ("--surface-soft", "#e9ecef"),
+                ("--field", "#fafbfc"),
+                ("--field-strong", "#ffffff"),
+                ("--line", "#e9ecef"),
+                ("--line-strong", "#dee2e6"),
+                ("--line-focus", "#495057"),
+                ("--text", "#212529"),
+                ("--soft", "#495057"),
+                ("--muted", "#6c757d"),
+                ("--accent", "#495057"),
+                ("--accent-2", "#1e3a8a"),
+                ("--accent-3", "#991b1b"),
+                ("--ok", "#16a34a"),
+                ("--warning", "#d97706"),
+                ("--danger", "#dc2626"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(33, 37, 41, 0.08)"),
+                ("--focus-ring", "0 0 0 4px rgba(73, 80, 87, 0.24)"),
+            ],
+        ),
+        default_theme(
+            "atelier-lavender",
+            "Atelier Lavender",
+            "OrbitStart",
+            "Gentle pale lavender card paper with wisteria-purple accents.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#f5f3f9"),
+                ("--bg", "#f5f3f9"),
+                ("--app-bg", "#f5f3f9"),
+                ("--rail", "#f5f3f9"),
+                ("--surface", "#fcfbfe"),
+                ("--surface-2", "#e8e4f0"),
+                ("--surface-3", "#dad2e6"),
+                ("--surface-strong", "#ffffff"),
+                ("--surface-soft", "#e8e4f0"),
+                ("--field", "#fcfbfe"),
+                ("--field-strong", "#ffffff"),
+                ("--line", "#e8e4f0"),
+                ("--line-strong", "#dad2e6"),
+                ("--line-focus", "#6b5ea8"),
+                ("--text", "#201c2b"),
+                ("--soft", "#484257"),
+                ("--muted", "#78718a"),
+                ("--accent", "#6b5ea8"),
+                ("--accent-2", "#2f5b4f"),
+                ("--accent-3", "#a83e3e"),
+                ("--ok", "#3b82f6"),
+                ("--warning", "#f59e0b"),
+                ("--danger", "#ef4444"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(32, 28, 43, 0.08)"),
+                ("--focus-ring", "0 0 0 4px rgba(107, 94, 168, 0.24)"),
+            ],
+        ),
+        default_theme(
+            "atelier-rust",
+            "Atelier Rust",
+            "OrbitStart",
+            "Grove: Dark forest green canvas with warm rust-red highlights.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#0e1912"),
+                ("--bg", "#142319"),
+                ("--app-bg", "#142319"),
+                ("--rail", "#0e1912"),
+                ("--surface", "#1a2d20"),
+                ("--surface-2", "#213928"),
+                ("--surface-3", "#2a4833"),
+                ("--surface-strong", "#1e3425"),
+                ("--surface-soft", "rgba(230, 225, 213, 0.045)"),
+                ("--field", "#18291d"),
+                ("--field-strong", "#1e3425"),
+                ("--line", "rgba(230, 225, 213, 0.12)"),
+                ("--line-strong", "rgba(230, 225, 213, 0.2)"),
+                ("--line-focus", "#bf4f36"),
+                ("--text", "#ece8dd"),
+                ("--soft", "#c2beaf"),
+                ("--muted", "#8e8a7c"),
+                ("--accent", "#bf4f36"),
+                ("--accent-2", "#e2be8a"),
+                ("--accent-3", "#bf4f36"),
+                ("--ok", "#5ca873"),
+                ("--warning", "#cc893b"),
+                ("--danger", "#bf4f36"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(0, 0, 0, 0.45)"),
+                ("--focus-ring", "0 0 0 4px rgba(191, 79, 54, 0.24)"),
+            ],
+        ),
+        default_theme(
+            "atelier-coal",
+            "Atelier Coal",
+            "OrbitStart",
+            "Obsidian: Dark charcoal space with radiant gold-orange highlights.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#121214"),
+                ("--bg", "#161619"),
+                ("--app-bg", "#161619"),
+                ("--rail", "#121214"),
+                ("--surface", "#1e1e22"),
+                ("--surface-2", "#2a2a2f"),
+                ("--surface-3", "#3a3a41"),
+                ("--surface-strong", "#25252a"),
+                ("--surface-soft", "rgba(255, 255, 255, 0.045)"),
+                ("--field", "#1a1a1e"),
+                ("--field-strong", "#25252a"),
+                ("--line", "#2a2a2f"),
+                ("--line-strong", "#3a3a41"),
+                ("--line-focus", "#e0533c"),
+                ("--text", "#e5e5e7"),
+                ("--soft", "#b2b2b6"),
+                ("--muted", "#7e7e82"),
+                ("--accent", "#e0533c"),
+                ("--accent-2", "#e2be8a"),
+                ("--accent-3", "#bf4f36"),
+                ("--ok", "#5ca873"),
+                ("--warning", "#cc893b"),
+                ("--danger", "#bf4f36"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(0, 0, 0, 0.5)"),
+                ("--focus-ring", "0 0 0 4px rgba(224, 83, 60, 0.24)"),
+            ],
+        ),
+        default_theme(
+            "atelier-abyss",
+            "Atelier Abyss",
+            "OrbitStart",
+            "Abyss: Deep oceanic indigo with high-contrast sky-blue accents.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#0a0d14"),
+                ("--bg", "#0f131a"),
+                ("--app-bg", "#0f131a"),
+                ("--rail", "#0a0d14"),
+                ("--surface", "#161b24"),
+                ("--surface-2", "#222935"),
+                ("--surface-3", "#323b49"),
+                ("--surface-strong", "#1b222f"),
+                ("--surface-soft", "rgba(255, 255, 255, 0.04)"),
+                ("--field", "#121721"),
+                ("--field-strong", "#1b222f"),
+                ("--line", "#222935"),
+                ("--line-strong", "#323b49"),
+                ("--line-focus", "#38bdf8"),
+                ("--text", "#e2e8f0"),
+                ("--soft", "#94a3b8"),
+                ("--muted", "#64748b"),
+                ("--accent", "#38bdf8"),
+                ("--accent-2", "#34d399"),
+                ("--accent-3", "#f87171"),
+                ("--ok", "#34d399"),
+                ("--warning", "#fbbf24"),
+                ("--danger", "#f87171"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(0, 0, 0, 0.5)"),
+                ("--focus-ring", "0 0 0 4px rgba(56, 189, 248, 0.24)"),
+            ],
+        ),
+        default_theme(
+            "atelier-amber",
+            "Atelier Amber",
+            "OrbitStart",
+            "Amber: Cozy charcoal-tea brown with radiant golden highlights.",
+            &[
+                ("--font-ui", "Inter, system-ui, sans-serif"),
+                ("--font-body", "Inter, system-ui, sans-serif"),
+                ("--font-title", "Georgia, \"Times New Roman\", serif"),
+                ("--font-mono", "\"SF Mono\", ui-monospace, Menlo, monospace"),
+                ("--bg-deep", "#120e0a"),
+                ("--bg", "#191410"),
+                ("--app-bg", "#191410"),
+                ("--rail", "#120e0a"),
+                ("--surface", "#211b16"),
+                ("--surface-2", "#2e2620"),
+                ("--surface-3", "#3f352c"),
+                ("--surface-strong", "#27201a"),
+                ("--surface-soft", "rgba(255, 255, 255, 0.04)"),
+                ("--field", "#1c1612"),
+                ("--field-strong", "#27201a"),
+                ("--line", "#2e2620"),
+                ("--line-strong", "#3f352c"),
+                ("--line-focus", "#f59e0b"),
+                ("--text", "#f5f5f4"),
+                ("--soft", "#d6d3d1"),
+                ("--muted", "#a8a29e"),
+                ("--accent", "#f59e0b"),
+                ("--accent-2", "#10b981"),
+                ("--accent-3", "#ef4444"),
+                ("--ok", "#10b981"),
+                ("--warning", "#f59e0b"),
+                ("--danger", "#ef4444"),
+                ("--radius-sm", "10px"),
+                ("--radius", "16px"),
+                ("--radius-md", "16px"),
+                ("--radius-lg", "24px"),
+                ("--shadow-card", "none"),
+                ("--shadow-elevated", "0 20px 52px rgba(0, 0, 0, 0.5)"),
+                ("--focus-ring", "0 0 0 4px rgba(245, 158, 11, 0.24)"),
             ],
         ),
     ]
@@ -1097,9 +1541,9 @@ fn associated_icon_base64(path: &Path) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
         let script = r#"
-param([string]$Path)
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Drawing
+$Path = '[PATH_PLACEHOLDER]'
 if (-not (Test-Path -LiteralPath $Path)) { exit 0 }
 $realPath = $Path
 if ($Path.EndsWith('.lnk', [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -1121,9 +1565,21 @@ $bitmap.Dispose()
 $icon.Dispose()
 'data:image/png;base64,' + [Convert]::ToBase64String($bytes)
 "#;
-        let path_arg = path.to_string_lossy().to_string();
-        let output = ProcessCommand::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script, &path_arg])
+        let escaped_path = path.to_string_lossy().to_string().replace("'", "''");
+        let final_script = script.replace("[PATH_PLACEHOLDER]", &escaped_path);
+
+        let mut cmd = ProcessCommand::new("powershell");
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(0x08000000);
+
+        let output = cmd
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &final_script,
+            ])
             .output()
             .ok()?;
         if !output.status.success() {
@@ -1219,14 +1675,18 @@ fn image_file_to_data_url(path: &Path) -> Result<String, String> {
 fn item_input_from_dropped_path(path_text: &str) -> OrbitItemInput {
     let path = PathBuf::from(path_text);
     let extension = extension_lower(&path);
-    let is_dir = fs::metadata(&path).map(|metadata| metadata.is_dir()).unwrap_or(false);
+    let is_dir = fs::metadata(&path)
+        .map(|metadata| metadata.is_dir())
+        .unwrap_or(false);
     let title = display_title_from_path(&path);
     let icon_base64 = associated_icon_base64(&path);
     let path_string = path.to_string_lossy().to_string();
 
     let (kind, group, icon, accent, category_tag) = if is_dir {
         ("folder", "work", "FolderOpen", "#8bd450", "folder")
-    } else if ["ps1", "bat", "cmd", "sh", "py", "js", "ts", "vbs", "ahk"].contains(&extension.as_str()) {
+    } else if ["ps1", "bat", "cmd", "sh", "py", "js", "ts", "vbs", "ahk"]
+        .contains(&extension.as_str())
+    {
         ("script", "scripts", "TerminalSquare", "#41e0a8", "script")
     } else if ["exe", "lnk", "appref-ms", "msi"].contains(&extension.as_str()) {
         ("app", "apps", "AppWindow", "#5cc8ff", "app")
@@ -1258,9 +1718,65 @@ fn item_input_from_dropped_path(path_text: &str) -> OrbitItemInput {
     }
 }
 
+fn unique_strings(values: Vec<String>) -> Vec<String> {
+    let mut result = Vec::new();
+    for value in values {
+        let clean = value.trim();
+        if !clean.is_empty() && !result.iter().any(|existing: &String| existing == clean) {
+            result.push(clean.to_string());
+        }
+    }
+    result
+}
+
+fn split_group_ids(value: &str) -> Vec<String> {
+    unique_strings(value.split(',').map(|part| part.to_string()).collect())
+}
+
+fn default_group_for_kind(kind: &str) -> &'static str {
+    match kind {
+        "app" => "apps",
+        "website" => "web",
+        "script" => "scripts",
+        "file" | "folder" | "action_chain" => "work",
+        _ => "work",
+    }
+}
+
+fn normalize_group_value(value: &str, kind: &str) -> String {
+    let groups = split_group_ids(value);
+    if groups.is_empty() {
+        default_group_for_kind(kind).to_string()
+    } else {
+        groups.join(",")
+    }
+}
+
+fn merge_group_values(existing: &str, incoming: &str, kind: &str) -> String {
+    let mut groups = split_group_ids(existing);
+    groups.extend(split_group_ids(incoming));
+    let groups = unique_strings(groups);
+    if groups.is_empty() {
+        default_group_for_kind(kind).to_string()
+    } else {
+        groups.join(",")
+    }
+}
+
+fn merge_string_lists(existing: &[String], incoming: &[String]) -> Vec<String> {
+    let mut values = existing.to_vec();
+    values.extend(incoming.iter().cloned());
+    unique_strings(values)
+}
+
 fn insert_item(conn: &Connection, input: &OrbitItemInput) -> Result<OrbitItem, String> {
+    if let Some(existing) = get_item_by_target(conn, &input.target)? {
+        return merge_existing_item(conn, &existing, input, false);
+    }
+
     let id = make_id(&input.kind, &input.target);
     let now = now_string();
+    let group = normalize_group_value(&input.group, &input.kind);
     conn.execute(
         r#"
         INSERT OR IGNORE INTO items (
@@ -1274,7 +1790,7 @@ fn insert_item(conn: &Connection, input: &OrbitItemInput) -> Result<OrbitItem, S
             input.title,
             input.subtitle,
             input.kind,
-            input.group,
+            group,
             input.target,
             serde_json::to_string(&input.aliases).unwrap_or_else(|_| "[]".to_string()),
             serde_json::to_string(&input.tags).unwrap_or_else(|_| "[]".to_string()),
@@ -1290,8 +1806,13 @@ fn insert_item(conn: &Connection, input: &OrbitItemInput) -> Result<OrbitItem, S
 }
 
 fn upsert_scanned_item(conn: &Connection, input: &OrbitItemInput) -> Result<OrbitItem, String> {
+    if let Some(existing) = get_item_by_target(conn, &input.target)? {
+        return merge_existing_item(conn, &existing, input, true);
+    }
+
     let id = make_id(&input.kind, &input.target);
     let now = now_string();
+    let group = normalize_group_value(&input.group, &input.kind);
     conn.execute(
         r#"
         INSERT INTO items (
@@ -1302,6 +1823,7 @@ fn upsert_scanned_item(conn: &Connection, input: &OrbitItemInput) -> Result<Orbi
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             subtitle = excluded.subtitle,
+            group_id = excluded.group_id,
             aliases_json = excluded.aliases_json,
             tags_json = excluded.tags_json,
             icon = excluded.icon,
@@ -1313,7 +1835,7 @@ fn upsert_scanned_item(conn: &Connection, input: &OrbitItemInput) -> Result<Orbi
             input.title,
             input.subtitle,
             input.kind,
-            input.group,
+            group,
             input.target,
             serde_json::to_string(&input.aliases).unwrap_or_else(|_| "[]".to_string()),
             serde_json::to_string(&input.tags).unwrap_or_else(|_| "[]".to_string()),
@@ -1341,6 +1863,92 @@ fn get_item(conn: &Connection, id: &str) -> Result<Option<OrbitItem>, String> {
     )
     .optional()
     .map_err(|error| format!("Failed to read item: {error}"))
+}
+
+fn get_item_by_target(conn: &Connection, target: &str) -> Result<Option<OrbitItem>, String> {
+    conn.query_row(
+        r#"
+        SELECT id, title, subtitle, kind, group_id, target, aliases_json, tags_json,
+               icon, accent, favorite, launch_count, last_launched_at
+        FROM items
+        WHERE target = ?1
+        "#,
+        params![target],
+        item_from_row,
+    )
+    .optional()
+    .map_err(|error| format!("Failed to read item by target: {error}"))
+}
+
+fn merge_existing_item(
+    conn: &Connection,
+    existing: &OrbitItem,
+    input: &OrbitItemInput,
+    update_metadata: bool,
+) -> Result<OrbitItem, String> {
+    let now = now_string();
+    let title = if update_metadata || existing.title.trim().is_empty() {
+        input.title.clone()
+    } else {
+        existing.title.clone()
+    };
+    let subtitle = if update_metadata || existing.subtitle.trim().is_empty() {
+        input.subtitle.clone()
+    } else {
+        existing.subtitle.clone()
+    };
+    let kind = if update_metadata {
+        input.kind.clone()
+    } else {
+        existing.kind.clone()
+    };
+    let icon = if update_metadata || existing.icon.trim().is_empty() {
+        input.icon.clone()
+    } else {
+        existing.icon.clone()
+    };
+    let accent = if update_metadata || existing.accent.trim().is_empty() {
+        input.accent.clone()
+    } else {
+        existing.accent.clone()
+    };
+    let group = merge_group_values(&existing.group, &input.group, &kind);
+    let aliases = merge_string_lists(&existing.aliases, &input.aliases);
+    let tags = merge_string_lists(&existing.tags, &input.tags);
+    let favorite = existing.favorite || input.favorite;
+
+    conn.execute(
+        r#"
+        UPDATE items
+        SET title = ?2,
+            subtitle = ?3,
+            kind = ?4,
+            group_id = ?5,
+            aliases_json = ?6,
+            tags_json = ?7,
+            icon = ?8,
+            accent = ?9,
+            favorite = ?10,
+            updated_at = ?11
+        WHERE id = ?1
+        "#,
+        params![
+            &existing.id,
+            title,
+            subtitle,
+            kind,
+            group,
+            serde_json::to_string(&aliases).unwrap_or_else(|_| "[]".to_string()),
+            serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string()),
+            icon,
+            accent,
+            if favorite { 1 } else { 0 },
+            now,
+        ],
+    )
+    .map_err(|error| format!("Failed to merge existing item labels: {error}"))?;
+
+    get_item(conn, &existing.id)?.ok_or_else(|| "Item not found after merge".to_string())
 }
 
 fn item_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<OrbitItem> {
@@ -1413,7 +2021,12 @@ fn plugin_logs(conn: &Connection, limit: usize) -> Result<Vec<PluginLog>, String
         .map_err(|error| format!("Failed to map plugin logs: {error}"))
 }
 
-fn log_plugin_event(conn: &Connection, plugin_id: &str, level: &str, message: &str) -> Result<(), String> {
+fn log_plugin_event(
+    conn: &Connection,
+    plugin_id: &str,
+    level: &str,
+    message: &str,
+) -> Result<(), String> {
     let now = now_string();
     let id = make_id("log", &format!("{plugin_id}:{level}:{message}:{now}"));
     conn.execute(
@@ -1453,10 +2066,17 @@ fn create_item(app: tauri::AppHandle, input: OrbitItemInput) -> Result<OrbitItem
 }
 
 #[tauri::command]
-fn create_items_from_paths(app: tauri::AppHandle, paths: Vec<String>) -> Result<Vec<OrbitItem>, String> {
+fn create_items_from_paths(
+    app: tauri::AppHandle,
+    paths: Vec<String>,
+) -> Result<Vec<OrbitItem>, String> {
     let conn = open_db()?;
     let mut created = Vec::new();
-    for path in paths.iter().map(|value| value.trim()).filter(|value| !value.is_empty()) {
+    for path in paths
+        .iter()
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+    {
         let input = item_input_from_dropped_path(path);
         created.push(insert_item(&conn, &input)?);
     }
@@ -1519,6 +2139,7 @@ fn update_item(app: tauri::AppHandle, item: OrbitItem) -> Result<OrbitItem, Stri
     let conn = open_db()?;
     let id = item.id.clone();
     let now = now_string();
+    let group = normalize_group_value(&item.group, &item.kind);
     conn.execute(
         r#"
         UPDATE items
@@ -1542,7 +2163,7 @@ fn update_item(app: tauri::AppHandle, item: OrbitItem) -> Result<OrbitItem, Stri
             item.title,
             item.subtitle,
             item.kind,
-            item.group,
+            group,
             item.target,
             serde_json::to_string(&item.aliases).unwrap_or_else(|_| "[]".to_string()),
             serde_json::to_string(&item.tags).unwrap_or_else(|_| "[]".to_string()),
@@ -1588,7 +2209,11 @@ fn launch_item(id: String) -> Result<String, String> {
 
 fn launch_action_chain(targets: &str) -> Result<(), String> {
     let mut launched = 0;
-    for target in targets.lines().map(str::trim).filter(|line| !line.is_empty() && !line.starts_with('#')) {
+    for target in targets
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+    {
         launch_target(target.to_string())?;
         launched += 1;
     }
@@ -1606,7 +2231,10 @@ fn launch_target(target: String) -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
-        let mut command = if target.starts_with("http://") || target.starts_with("https://") || target.contains("://") {
+        let mut command = if target.starts_with("http://")
+            || target.starts_with("https://")
+            || target.contains("://")
+        {
             let mut cmd = ProcessCommand::new("rundll32.exe");
             cmd.arg("url.dll,FileProtocolHandler").arg(&target);
             cmd
@@ -1624,7 +2252,9 @@ fn launch_target(target: String) -> Result<String, String> {
 
     #[cfg(not(target_os = "windows"))]
     {
-        Err(format!("Launching is currently implemented on Windows only: {target}"))
+        Err(format!(
+            "Launching is currently implemented on Windows only: {target}"
+        ))
     }
 }
 
@@ -1777,8 +2407,18 @@ $items = foreach ($root in $roots) {
 @($items) | ConvertTo-Json -Depth 4
 "#;
 
-    let output = ProcessCommand::new("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script])
+    let mut cmd = ProcessCommand::new("powershell.exe");
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000);
+
+    let output = cmd
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ])
         .output()
         .map_err(|error| format!("Failed to run shortcut resolver: {error}"))?;
 
@@ -1791,8 +2431,8 @@ $items = foreach ($root in $roots) {
         return Ok(Vec::new());
     }
 
-    let shortcuts: Vec<ShortcutInfo> =
-        serde_json::from_str(&stdout).map_err(|error| format!("Failed to parse shortcut resolver output: {error}"))?;
+    let shortcuts: Vec<ShortcutInfo> = serde_json::from_str(&stdout)
+        .map_err(|error| format!("Failed to parse shortcut resolver output: {error}"))?;
 
     Ok(shortcuts
         .into_iter()
@@ -1806,7 +2446,11 @@ $items = foreach ($root in $roots) {
             };
             OrbitItemInput {
                 title: shortcut.title,
-                subtitle: if resolved.trim().is_empty() { shortcut.shortcut.clone() } else { resolved },
+                subtitle: if resolved.trim().is_empty() {
+                    shortcut.shortcut.clone()
+                } else {
+                    resolved
+                },
                 kind: "app".to_string(),
                 group: "apps".to_string(),
                 target: shortcut.shortcut,
@@ -1907,19 +2551,124 @@ fn scan_browser_bookmarks() -> Result<Vec<OrbitItem>, String> {
     for input in found {
         let _ = upsert_scanned_item(&conn, &input);
     }
-    log_plugin_event(&conn, "core-bookmarks", "info", "Browser bookmark import completed")?;
+    log_plugin_event(
+        &conn,
+        "core-bookmarks",
+        "info",
+        "Browser bookmark import completed",
+    )?;
     all_items(&conn)
 }
 
 #[tauri::command]
-fn set_plugin_enabled(app: tauri::AppHandle, id: String, enabled: bool) -> Result<CatalogSnapshot, String> {
+fn update_global_hotkey(app: tauri::AppHandle, new_hotkey: String) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+        let conn = open_db().map_err(|e| e.to_string())?;
+        let old_hotkey = setting(&conn, "global_hotkey", "Ctrl+Alt+Space")?;
+
+        let old_shortcut = old_hotkey
+            .to_lowercase()
+            .parse::<tauri_plugin_global_shortcut::Shortcut>()
+            .map_err(|e| format!("解析旧快捷键失败: {}", e))?;
+
+        let new_shortcut = new_hotkey
+            .to_lowercase()
+            .parse::<tauri_plugin_global_shortcut::Shortcut>()
+            .map_err(|e| format!("解析新快捷键失败，格式可能不正确: {}", e))?;
+
+        let shortcut_manager = app.global_shortcut();
+
+        // 尝试注册新快捷键，看是否冲突或格式无效
+        shortcut_manager
+            .register(new_shortcut.clone())
+            .map_err(|e| format!("快捷键冲突或注册失败: {}", e))?;
+
+        // 注册成功，注销老快捷键
+        let _ = shortcut_manager.unregister(old_shortcut);
+
+        // 保存新配置到数据库
+        set_setting_value(&conn, "global_hotkey", &new_hotkey)?;
+        Ok(())
+    }
+    #[cfg(not(desktop))]
+    {
+        let conn = open_db().map_err(|e| e.to_string())?;
+        set_setting_value(&conn, "global_hotkey", &new_hotkey)?;
+        Ok(())
+    }
+}
+
+#[tauri::command]
+fn preview_scan_shortcuts() -> Result<Vec<OrbitItemInput>, String> {
+    let mut found = scan_shortcuts_with_powershell().unwrap_or_else(|_| {
+        let mut fallback = Vec::new();
+        for root in shortcut_roots() {
+            scan_dir_for_shortcuts(&root, &mut fallback);
+        }
+        fallback
+    });
+    found.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    Ok(found)
+}
+
+#[tauri::command]
+fn preview_scan_browser_bookmarks() -> Result<Vec<OrbitItemInput>, String> {
+    let mut found = Vec::new();
+    for path in bookmark_files() {
+        if !path.is_file() {
+            continue;
+        }
+        let text = fs::read_to_string(path).unwrap_or_default();
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+            if let Some(roots) = value.get("roots").and_then(|roots| roots.as_object()) {
+                for root in roots.values() {
+                    collect_bookmarks(root, &mut found);
+                }
+            }
+        }
+    }
+    found.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+    Ok(found)
+}
+
+#[tauri::command]
+fn import_scanned_items(
+    app: tauri::AppHandle,
+    items: Vec<OrbitItemInput>,
+) -> Result<Vec<OrbitItem>, String> {
+    let conn = open_db()?;
+    for input in items {
+        let _ = upsert_scanned_item(&conn, &input);
+    }
+    let _ = app.emit("orbit://refresh-resources", ());
+    all_items(&conn)
+}
+
+#[tauri::command]
+fn set_plugin_enabled(
+    app: tauri::AppHandle,
+    id: String,
+    enabled: bool,
+) -> Result<CatalogSnapshot, String> {
     let conn = open_db()?;
     conn.execute(
         "UPDATE plugin_states SET enabled = ?2, updated_at = ?3 WHERE id = ?1",
         params![id, if enabled { 1 } else { 0 }, now_string()],
     )
     .map_err(|error| format!("Failed to update plugin state: {error}"))?;
-    log_plugin_event(&conn, &id, "info", if enabled { "Plugin enabled" } else { "Plugin disabled" })?;
+    log_plugin_event(
+        &conn,
+        &id,
+        "info",
+        if enabled {
+            "Plugin enabled"
+        } else {
+            "Plugin disabled"
+        },
+    )?;
     let _ = app.emit("orbit://refresh-resources", ());
     catalog_snapshot()
 }
@@ -1928,7 +2677,12 @@ fn set_plugin_enabled(app: tauri::AppHandle, id: String, enabled: bool) -> Resul
 fn set_active_theme(app: tauri::AppHandle, theme_id: String) -> Result<CatalogSnapshot, String> {
     let conn = open_db()?;
     set_setting_value(&conn, "active_theme_id", &theme_id)?;
-    log_plugin_event(&conn, "core-themes", "info", &format!("Theme changed to {theme_id}"))?;
+    log_plugin_event(
+        &conn,
+        "core-themes",
+        "info",
+        &format!("Theme changed to {theme_id}"),
+    )?;
     let _ = app.emit("orbit://refresh-resources", ());
     catalog_snapshot()
 }
@@ -1954,7 +2708,16 @@ fn set_close_behavior(app: tauri::AppHandle, behavior: String) -> Result<Catalog
 fn set_safe_mode(app: tauri::AppHandle, enabled: bool) -> Result<CatalogSnapshot, String> {
     let conn = open_db()?;
     set_setting_value(&conn, "safe_mode", if enabled { "true" } else { "false" })?;
-    log_plugin_event(&conn, "core-plugin-dev", "warn", if enabled { "Safe mode enabled" } else { "Safe mode disabled" })?;
+    log_plugin_event(
+        &conn,
+        "core-plugin-dev",
+        "warn",
+        if enabled {
+            "Safe mode enabled"
+        } else {
+            "Safe mode disabled"
+        },
+    )?;
     let _ = app.emit("orbit://refresh-resources", ());
     catalog_snapshot()
 }
@@ -1972,7 +2735,8 @@ fn export_catalog_json() -> Result<ExportResult, String> {
     let json = serde_json::to_string_pretty(&export)
         .map_err(|error| format!("Failed to serialize export: {error}"))?;
     let backup_dir = app_data_dir()?.join("backups");
-    fs::create_dir_all(&backup_dir).map_err(|error| format!("Failed to create backup directory: {error}"))?;
+    fs::create_dir_all(&backup_dir)
+        .map_err(|error| format!("Failed to create backup directory: {error}"))?;
     let path = backup_dir.join(format!("orbitstart-export-{}.json", export.exported_at));
     fs::write(&path, &json).map_err(|error| format!("Failed to write export: {error}"))?;
     Ok(ExportResult {
@@ -2012,7 +2776,8 @@ fn import_catalog_json(app: tauri::AppHandle, json: String) -> Result<Vec<OrbitI
 fn ensure_local_templates() -> Result<(), String> {
     let plugin_root = plugins_dir()?.join("hello-command");
     if !plugin_root.exists() {
-        fs::create_dir_all(&plugin_root).map_err(|error| format!("Failed to create hello plugin: {error}"))?;
+        fs::create_dir_all(&plugin_root)
+            .map_err(|error| format!("Failed to create hello plugin: {error}"))?;
         fs::write(plugin_root.join("plugin.json"), hello_plugin_manifest())
             .map_err(|error| format!("Failed to write hello plugin manifest: {error}"))?;
         fs::write(plugin_root.join("main.ts"), hello_plugin_source())
@@ -2023,7 +2788,8 @@ fn ensure_local_templates() -> Result<(), String> {
 
     let theme_root = themes_dir()?.join("aurora-focus");
     if !theme_root.exists() {
-        fs::create_dir_all(&theme_root).map_err(|error| format!("Failed to create sample theme: {error}"))?;
+        fs::create_dir_all(&theme_root)
+            .map_err(|error| format!("Failed to create sample theme: {error}"))?;
         fs::write(theme_root.join("theme.json"), sample_theme_manifest())
             .map_err(|error| format!("Failed to write sample theme: {error}"))?;
         fs::write(theme_root.join("theme.css"), sample_theme_css())
@@ -2146,16 +2912,31 @@ fn create_plugin_template(name: String) -> Result<String, String> {
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("-");
-    let slug = if slug.is_empty() { "orbit-plugin".to_string() } else { slug };
+    let slug = if slug.is_empty() {
+        "orbit-plugin".to_string()
+    } else {
+        slug
+    };
     let path = plugins_dir()?.join(&slug);
-    fs::create_dir_all(&path).map_err(|error| format!("Failed to create plugin template: {error}"))?;
-    let manifest = hello_plugin_manifest().replace("hello-command", &slug).replace("Hello Command", &name);
-    fs::write(path.join("plugin.json"), manifest).map_err(|error| format!("Failed to write plugin manifest: {error}"))?;
-    fs::write(path.join("main.ts"), hello_plugin_source()).map_err(|error| format!("Failed to write plugin source: {error}"))?;
-    fs::write(path.join("README.md"), hello_plugin_readme()).map_err(|error| format!("Failed to write plugin README: {error}"))?;
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("Failed to create plugin template: {error}"))?;
+    let manifest = hello_plugin_manifest()
+        .replace("hello-command", &slug)
+        .replace("Hello Command", &name);
+    fs::write(path.join("plugin.json"), manifest)
+        .map_err(|error| format!("Failed to write plugin manifest: {error}"))?;
+    fs::write(path.join("main.ts"), hello_plugin_source())
+        .map_err(|error| format!("Failed to write plugin source: {error}"))?;
+    fs::write(path.join("README.md"), hello_plugin_readme())
+        .map_err(|error| format!("Failed to write plugin README: {error}"))?;
 
     let conn = open_db()?;
-    log_plugin_event(&conn, "core-plugin-dev", "info", &format!("Created plugin template {slug}"))?;
+    log_plugin_event(
+        &conn,
+        "core-plugin-dev",
+        "info",
+        &format!("Created plugin template {slug}"),
+    )?;
     Ok(path.to_string_lossy().to_string())
 }
 
@@ -2193,6 +2974,78 @@ async fn open_aux_window(app: tauri::AppHandle, panel: String) -> Result<(), Str
         .build()
         .map_err(|error| format!("Failed to open {label} window: {error}"))?;
     Ok(())
+}
+
+#[tauri::command]
+fn get_autostart_enabled() -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        let mut cmd = ProcessCommand::new("reg");
+        cmd.creation_flags(0x08000000);
+        let output = cmd
+            .args([
+                "query",
+                r#"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"#,
+                "/v",
+                "OrbitStart",
+            ])
+            .output()
+            .map_err(|e| e.to_string())?;
+        Ok(output.status.success())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(false)
+    }
+}
+
+#[tauri::command]
+fn set_autostart_enabled(enabled: bool) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        if enabled {
+            let exe_path = std::env::current_exe()
+                .map_err(|e| format!("Failed to get current exe path: {e}"))?;
+            let exe_str = exe_path.to_string_lossy().to_string();
+            let exe_arg = format!("\"{}\"", exe_str);
+            let mut cmd = ProcessCommand::new("reg");
+            cmd.creation_flags(0x08000000);
+            let status = cmd
+                .args([
+                    "add",
+                    r#"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"#,
+                    "/v",
+                    "OrbitStart",
+                    "/t",
+                    "REG_SZ",
+                    "/d",
+                    &exe_arg,
+                    "/f",
+                ])
+                .status()
+                .map_err(|e| e.to_string())?;
+            if !status.success() {
+                return Err("Failed to write autostart registry".to_string());
+            }
+        } else {
+            let mut cmd = ProcessCommand::new("reg");
+            cmd.creation_flags(0x08000000);
+            let _ = cmd
+                .args([
+                    "delete",
+                    r#"HKCU\Software\Microsoft\Windows\CurrentVersion\Run"#,
+                    "/v",
+                    "OrbitStart",
+                    "/f",
+                ])
+                .status();
+        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(())
+    }
 }
 
 #[cfg(desktop)]
@@ -2248,18 +3101,34 @@ fn handle_main_window_close(window: &tauri::Window, event: &WindowEvent) {
 
 #[cfg(desktop)]
 fn setup_global_shortcut(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    app.handle().plugin(
-        tauri_plugin_global_shortcut::Builder::new()
-            .with_shortcut("ctrl+alt+space")?
-            .with_handler(|app, shortcut, event| {
-                if event.state == ShortcutState::Pressed
-                    && shortcut.matches(Modifiers::CONTROL | Modifiers::ALT, Code::Space)
-                {
-                    show_and_focus_main(app);
-                }
-            })
-            .build(),
-    )?;
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    // 从数据库中读取当前热键设置，如果没有，则默认使用 "Ctrl+Alt+Space"
+    let hotkey_str = open_db()
+        .and_then(|conn| setting(&conn, "global_hotkey", "Ctrl+Alt+Space"))
+        .unwrap_or_else(|_| "Ctrl+Alt+Space".to_string());
+    let hotkey_str = hotkey_str.to_lowercase();
+
+    let builder =
+        tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _shortcut, event| {
+            if event.state == ShortcutState::Pressed {
+                show_and_focus_main(app);
+            }
+        });
+
+    if let Err(e) = app.handle().plugin(builder.build()) {
+        eprintln!("Failed to register global shortcut plugin: {e}");
+    } else {
+        // 动态注册从数据库读取的快捷键
+        if let Ok(shortcut) = hotkey_str.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+            if let Err(e) = app.global_shortcut().register(shortcut) {
+                eprintln!(
+                    "Failed to register initial global shortcut '{}': {}",
+                    hotkey_str, e
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -2312,9 +3181,12 @@ pub fn run() {
             delete_item,
             launch_item,
             launch_target,
-            reveal_target,
             scan_shortcuts,
             scan_browser_bookmarks,
+            update_global_hotkey,
+            preview_scan_shortcuts,
+            preview_scan_browser_bookmarks,
+            import_scanned_items,
             set_plugin_enabled,
             set_active_theme,
             set_density,
@@ -2324,7 +3196,9 @@ pub fn run() {
             import_catalog_json,
             create_plugin_template,
             open_data_directory,
-            open_aux_window
+            open_aux_window,
+            get_autostart_enabled,
+            set_autostart_enabled
         ])
         .setup(|app| {
             let _ = open_db();
@@ -2344,10 +3218,8 @@ pub fn run() {
             } else if event.id() == "show" {
                 toggle_main_window(app);
             } else if event.id() == "settings" {
-                let app_handle = app.clone();
-                tauri::async_runtime::spawn(async move {
-                    let _ = open_aux_window(app_handle, "settings".to_string()).await;
-                });
+                show_and_focus_main(app);
+                emit_main(app, "orbit://open-settings");
             } else if event.id() == "refresh" {
                 emit_main(app, "orbit://refresh-resources");
             } else if event.id() == "safe-mode" {

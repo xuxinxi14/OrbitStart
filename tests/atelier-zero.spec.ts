@@ -56,9 +56,9 @@ function getContrastRatio(color1: string, color2: string): number {
   return (brighter + 0.05) / (darker + 0.05);
 }
 
-// Helper: Set theme in localStorage before page load
+// Helper: Set theme in localStorage
 async function setInitialTheme(page, themeId: string) {
-  await page.addInitScript((tId) => {
+  await page.evaluate((tId) => {
     const storageKey = 'orbitstart.browser.snapshot';
     const raw = window.localStorage.getItem(storageKey);
     let snapshot: any = { settings: { activeThemeId: 'local-galaxy' } };
@@ -71,6 +71,8 @@ async function setInitialTheme(page, themeId: string) {
     snapshot.settings.activeThemeId = tId;
     window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
   }, themeId);
+  await page.reload();
+  await page.waitForSelector('.app-shell', { timeout: 10000 });
 }
 
 test.describe('Atelier Zero Theme E2E Tests', () => {
@@ -116,6 +118,10 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       expect(varFontTitle).toContain('Georgia');
 
       // 3. Sidebar Elements (background, brand-orbit surface, active rail-button surface, rail-button active text, mini-panel background)
+      await page.goto('/?view=dashboard');
+      await page.waitForSelector('.sidebar');
+      await page.waitForTimeout(500);
+
       // Assertion 7: Sidebar background uses --bg
       const sidebarBg = await getComputedStyle(page, '.sidebar', 'background-color');
       expect(parseColor(sidebarBg)).toEqual(parseColor('#fbf6ee'));
@@ -133,13 +139,14 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       const settingsButton = page.locator('.rail-button[title="设置"], button:has-text("设置"), button:has(.lucide-Settings)').first();
       await settingsButton.click();
       await page.waitForSelector('.settings-shell');
+      await page.waitForTimeout(300);
 
       // Assertion 10: Active rail-button surface is --surface
       const activeRailBg = await getComputedStyle(page, '.rail-button.active', 'background-color');
       expect(parseColor(activeRailBg)).toEqual(parseColor('#fffdf8'));
 
       // Assertion 11: Active rail-button border-color is --line-strong (#ded2c3)
-      const activeRailBorder = await getComputedStyle(page, '.rail-button.active', 'border-color');
+      const activeRailBorder = await getComputedStyle(page, '.rail-button.active', 'border-top-color');
       expect(parseColor(activeRailBorder)).toEqual(parseColor('#ded2c3'));
 
       // Assertion 12: Active rail-button text color is --accent
@@ -273,7 +280,7 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
 
       const galaxyCard = page.locator('.theme-card').filter({ hasText: 'Local Galaxy' }).first();
       const zeroCard = page.locator('.theme-card').filter({ hasText: 'Atelier Zero' }).first();
-      const darkCard = page.locator('.theme-card').filter({ hasText: 'Orbit Dark' }).first();
+      const darkCard = page.locator('.theme-card').filter({ hasText: 'Zentou Wireframe' }).first();
 
       // Perform rapid toggles
       for (let i = 0; i < 3; i++) {
@@ -312,12 +319,12 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
         // Click settings rail button
         const settingsButton = page.locator('.rail-button[title="设置"], button:has-text("设置"), button:has(.lucide-Settings)').first();
         await settingsButton.click();
-        await expect(page.locator('.topbar h1')).toHaveText('设置中心');
+        await expect(page.locator('.modal-panel .modal-head h2')).toHaveText('轨道控制');
 
-        // Click dashboard rail button to close/go back
-        const dashboardButton = page.locator('.rail-button').first();
-        await dashboardButton.click();
-        await expect(page.locator('.topbar h1')).toHaveText('资源中心');
+        // Click close button on modal header to close
+        const closeButton = page.locator('.modal-panel .modal-head button.icon-action').first();
+        await closeButton.click();
+        await expect(page.locator('.modal-panel')).toHaveCount(0);
       }
 
       // Assertion 41: Final state is dashboard view
@@ -418,12 +425,13 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
 
     test('11-25. Element & Interactive State Styling Assertions', async ({ page }) => {
       await setInitialTheme(page, 'atelier-zero');
-      await page.goto('/?view=settings&panel=themes');
-      await page.waitForSelector('.theme-card');
+      await page.goto('/');
+      await page.waitForSelector('.sidebar');
 
       // Assertion 56: Rail button hover background becomes Soft (#eee4d7)
-      const railBtn = page.locator('.rail-button').first();
+      const railBtn = page.locator('.rail-button').nth(1);
       await railBtn.hover();
+      await page.waitForTimeout(300);
       const railHoverBg = await railBtn.evaluate(el => window.getComputedStyle(el).backgroundColor);
       expect(parseColor(railHoverBg)).toEqual(parseColor('#eee4d7'));
 
@@ -459,7 +467,6 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       expect(eyebrowFamily).toContain('Inter');
 
       // Assertion 62: Resource row hover raised shadow check
-      await page.goto('/?view=dashboard');
       await page.waitForSelector('.resource-row');
       const resourceRow = page.locator('.resource-row').first();
       await resourceRow.hover();
@@ -478,8 +485,12 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       const searchOutlineColor = await searchInput.evaluate(el => window.getComputedStyle(el.parentElement!).borderColor);
       expect(parseColor(searchOutlineColor)).toEqual(parseColor('#9b5b32'));
 
+      // Open settings overlay
+      const settingsButton = page.locator('.rail-button[title="设置"], button:has-text("设置"), button:has(.lucide-Settings)').first();
+      await settingsButton.click();
+      await page.waitForSelector('.modal-panel');
+
       // Assertion 65: Option elements background check (no dark leaks)
-      await page.goto('/?view=settings&panel=general');
       const selectElem = page.locator('.setting-list select').first();
       if (await selectElem.count() > 0) {
         const optionElem = selectElem.locator('option').first();
@@ -491,16 +502,25 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       const primaryRadius = await getComputedStyle(page, '.primary-action', 'border-radius');
       expect(primaryRadius).toBe('10px');
 
+      // Close settings overlay
+      const closeSettingsBtn = page.locator('.modal-panel .modal-head button.icon-action').first();
+      await closeSettingsBtn.click();
+      await page.waitForSelector('.modal-panel', { state: 'detached' });
+
       // Assertion 67: Destructive buttons red fill check
-      // Open add resource panel to view destructive action button (or check class directly if rendered)
-      await page.goto('/?view=dashboard');
-      await page.waitForSelector('.primary-action');
       await page.locator('.primary-action').filter({ hasText: '添加资源' }).click();
       await page.waitForSelector('.editor-panel');
-      // Cancel is a secondary action, let's trigger a condition or check if a danger-action is on settings
-      await page.locator('.editor-panel .icon-action').click(); // close
+      await page.locator('.editor-panel .icon-action').click(); // close editor
+      await page.waitForSelector('.editor-panel', { state: 'detached' });
 
-      await page.goto('/?view=settings&panel=plugins');
+      // Open settings overlay again to test plugins view
+      await settingsButton.click();
+      await page.waitForSelector('.modal-panel');
+      // Click plugins menu button in settings menu
+      const pluginsMenuBtn = page.locator('.settings-menu button').nth(1); // general is 0, plugins is 1
+      await pluginsMenuBtn.click();
+      await page.waitForSelector('.plugin-card');
+
       const dangerAction = page.locator('.danger-action').first();
       if (await dangerAction.count() > 0) {
         const dangerBg = await dangerAction.evaluate(el => window.getComputedStyle(el).backgroundColor);
@@ -513,6 +533,10 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
         const switchBg = await switchBtnOn.evaluate(el => window.getComputedStyle(el).backgroundColor);
         expect(switchBg).toContain('rgba(128, 230, 167');
       }
+
+      // Close settings modal
+      await page.locator('.settings-modal-panel .modal-head .icon-action').click();
+      await page.waitForSelector('.settings-modal-panel', { state: 'detached' });
 
       // Assertion 69: Window controls hover check
       const windowMinBtn = page.locator('.window-controls button').first();
@@ -531,16 +555,27 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
   test.describe('Tier 3 - Cross-Feature Combinations', () => {
 
     test('Theme swap and Settings page form elements verification', async ({ page }) => {
-      // 1. Theme swap via UI
-      await page.goto('/?view=settings&panel=themes');
+      await page.goto('/');
+      await page.waitForSelector('.app-shell');
+
+      // 1. Open settings overlay
+      const settingsButton = page.locator('.rail-button[title="设置"], button:has-text("设置"), button:has(.lucide-Settings)').first();
+      await settingsButton.click();
+      await page.waitForSelector('.modal-panel');
+
+      // 2. Select Themes menu item (Themes is the 3rd section: general, plugins, themes...)
+      await page.locator('.settings-menu button').nth(2).click();
       await page.waitForSelector('.theme-card');
+
+      // 3. Theme swap via UI
       await page.locator('.theme-card').filter({ hasText: 'Atelier Zero' }).first().click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'atelier-zero');
 
-      // 2. Settings navigation
-      await page.locator('.settings-menu button').filter({ hasText: '系统设置' }).first().click();
-      await page.waitForSelector('.settings-page-grid');
+      // 4. Settings navigation back to general
+      await page.locator('.settings-menu button').nth(0).click();
+      await page.waitForSelector('.setting-list');
 
-      // 3. Config forms theming check (inputs background is surface)
+      // 5. Config forms theming check (inputs background is surface)
       const inputBg = await getComputedStyle(page, '.setting-list select', 'background-color');
       expect(parseColor(inputBg)).toEqual(parseColor('#fffdf8'));
     });
@@ -578,6 +613,14 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       await page.goto('/');
       await page.waitForSelector('.app-shell');
 
+      // Create a card first to make sure it exists
+      await page.locator('.primary-action').filter({ hasText: '添加资源' }).first().click();
+      await page.waitForSelector('.editor-panel');
+      await page.locator('.form-grid input').nth(0).fill('Atelier E2E Test');
+      await page.locator('.form-grid input').nth(1).fill('C:\\Test\\e2e-run.exe');
+      await page.locator('.modal-actions .primary-action').filter({ hasText: '保存' }).click();
+      await page.waitForSelector('.resource-row:has-text("Atelier E2E Test")');
+
       // 1. Focus search styles
       const searchShell = page.locator('.search-shell');
       const searchInput = searchShell.locator('input');
@@ -612,11 +655,15 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
 
     test('Plugin toggling and stats count update styling', async ({ page }) => {
       await setInitialTheme(page, 'atelier-zero');
-      await page.goto('/?view=settings&panel=plugins');
-      await page.waitForSelector('.plugin-card');
+      await page.goto('/');
+      await page.waitForSelector('.app-shell');
 
       // Get initial count in sidebar
       const initialCount = await page.locator('.mini-panel-button strong').innerText();
+
+      // Click mini-panel-button to open plugins overlay
+      await page.locator('.mini-panel-button').first().click();
+      await page.waitForSelector('.plugin-card');
 
       // Toggle first plugin
       const switchBtn = page.locator('.plugin-card .switch-button').first();
@@ -631,6 +678,11 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       const countColor = await getComputedStyle(page, '.mini-panel-button strong', 'color');
       const expectedColors = [parseColor('#2f5b4f'), parseColor('#9b5b32')];
       expect(expectedColors.some(c => JSON.stringify(c) === JSON.stringify(parseColor(countColor)))).toBe(true);
+
+      // Close plugins overlay
+      const closeBtn = page.locator('.modal-panel .modal-head button.icon-action').first();
+      await closeBtn.click();
+      await page.waitForSelector('.modal-panel', { state: 'detached' });
     });
 
     test('Form validation error triggers and input outline', async ({ page }) => {
@@ -656,12 +708,26 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
 
     test('Theme swap back and cleanliness check', async ({ page }) => {
       await setInitialTheme(page, 'atelier-zero');
-      await page.goto('/?view=settings&panel=themes');
+      await page.goto('/');
+      await page.waitForSelector('.app-shell');
+
+      // Open settings overlay
+      const settingsButton = page.locator('.rail-button[title="设置"], button:has-text("设置"), button:has(.lucide-Settings)').first();
+      await settingsButton.click();
+      await page.waitForSelector('.modal-panel');
+
+      // Click themes tab
+      await page.locator('.settings-menu button').nth(2).click();
       await page.waitForSelector('.theme-card');
 
       // Swap back to Local Galaxy
       await page.locator('.theme-card').filter({ hasText: 'Local Galaxy' }).first().click();
       await expect(page.locator('html')).toHaveAttribute('data-theme', 'local-galaxy');
+
+      // Close settings overlay
+      const closeSettingsBtn = page.locator('.modal-panel .modal-head button.icon-action').first();
+      await closeSettingsBtn.click();
+      await page.waitForSelector('.modal-panel', { state: 'detached' });
 
       // Check background color is local galaxy (#050812)
       const bg = await getComputedStyle(page, '.app-shell', 'background-color');
@@ -688,8 +754,8 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       const newTab = page.locator('.group-tabs button.selected');
       await expect(newTab).toContainText('Workstation Beta');
 
-      // Navigate to plugins settings, enable a plugin
-      await page.goto('/?view=settings&panel=plugins');
+      // Open plugins overlay via sidebar mini-panel button
+      await page.locator('.mini-panel-button').first().click();
       await page.waitForSelector('.plugin-card');
       const obsidianCard = page.locator('.plugin-card').filter({ hasText: 'Obsidian Vault Opener' }).first();
       const switchBtn = obsidianCard.locator('.switch-button');
@@ -697,8 +763,13 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
         await switchBtn.click();
       }
 
+      // Close plugins overlay
+      const closeBtn = page.locator('.modal-panel .modal-head button.icon-action').first();
+      await closeBtn.click();
+      await page.waitForSelector('.modal-panel', { state: 'detached' });
+
       // Check counts updated in sidebar
-      await expect(page.locator('.mini-panel-button strong')).toContainText('3/4');
+      await expect(page.locator('.mini-panel-button strong')).toContainText('4/4');
     });
 
     test('2. Resource Creation and Interaction Workflow', async ({ page }) => {
@@ -713,8 +784,8 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       // Fill form
       await page.locator('.form-grid input').nth(0).fill('AWS Console');
       await page.locator('.form-grid input').nth(1).fill('https://console.aws.amazon.com');
-      // Select Group "网址"
-      await page.locator('.form-grid select').nth(1).selectOption({ label: '网址' });
+      // Select Group "工作区" (which is always enabled)
+      await page.locator('.group-tag-checkbox').filter({ hasText: '工作区' }).click();
       await page.locator('.modal-actions .primary-action').click();
 
       // Search for AWS
@@ -737,7 +808,11 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
 
     test('3. System Plugin Lifecycle Workflow', async ({ page }) => {
       await setInitialTheme(page, 'atelier-zero');
-      await page.goto('/?view=settings&panel=plugins');
+      await page.goto('/');
+      await page.waitForSelector('.app-shell');
+
+      // Open plugins overlay via sidebar mini-panel button
+      await page.locator('.mini-panel-button').first().click();
       await page.waitForSelector('.plugin-card');
 
       // Toggle Obsidian Vault Opener
@@ -751,8 +826,12 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
       const nextText = await switchBtn.innerText();
       expect(nextText).not.toBe(initialText);
 
-      // Go to dashboard and verify status card holds correct styles
-      await page.goto('/?view=dashboard');
+      // Close plugins overlay
+      const closeBtn = page.locator('.modal-panel .modal-head button.icon-action').first();
+      await closeBtn.click();
+      await page.waitForSelector('.modal-panel', { state: 'detached' });
+
+      // Verify status card holds correct styles on dashboard
       await page.waitForSelector('.status-card');
       const statusIconColor = await getComputedStyle(page, '.status-icon', 'color');
       expect(parseColor(statusIconColor)).toEqual(parseColor('#4f8a4f')); // green
@@ -790,11 +869,11 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
 
       const themeManifests = [
         { name: 'Local Galaxy', id: 'local-galaxy', bg: '#050812' },
-        { name: 'Orbit Dark', id: 'orbit-dark', bg: '#151515' },
-        { name: 'Graphite Light', id: 'graphite-light', bg: '#f3f4f6' },
-        { name: 'Sky Blue', id: 'sky-blue', bg: '#eaf6ff' },
-        { name: 'Ink Blue', id: 'ink-blue', bg: '#111827' },
-        { name: 'Mint Light', id: 'mint-light', bg: '#ecfbf3' },
+        { name: 'Zentou Wireframe', id: 'orbit-dark', bg: '#FAF6EE' },
+        { name: 'Atelier Charcoal', id: 'atelier-charcoal', bg: '#eceff3' },
+        { name: 'Atelier Sky', id: 'atelier-sky', bg: '#dff2ff' },
+        { name: 'People\'s Platform', id: 'ink-blue', bg: '#F7F3E7' },
+        { name: 'Atelier Mint', id: 'atelier-mint', bg: '#e3f8ec' },
         { name: 'Atelier Zero', id: 'atelier-zero', bg: '#fbf6ee' }
       ];
 

@@ -26,6 +26,7 @@
   --danger: #ff7a90;
   --ok: #80e6a7;
   --warning: #e9bd68;
+  --theme-accent: var(--accent, var(--teal));
 
   --space-1: 4px;
   --space-2: 8px;
@@ -145,21 +146,41 @@ textarea:focus-visible {
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  isolation: isolate;
   pointer-events: none;
   background: var(--bg-deep);
+}
+
+.local-galaxy-backdrop::before {
+  position: absolute;
+  inset: -2%;
+  z-index: 2;
+  background:
+    radial-gradient(circle at 18% 22%, rgba(39, 215, 198, 0.12), transparent 28%),
+    radial-gradient(circle at 77% 24%, rgba(214, 168, 92, 0.18), transparent 30%),
+    var(--asset-silk-depth, none) center / cover no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.36;
+  transform: scale(1.02);
+  animation: galaxy-silk-drift 36s ease-in-out infinite alternate;
 }
 
 .local-galaxy-backdrop::after {
   position: absolute;
   inset: 0;
+  z-index: 3;
   background:
-    linear-gradient(90deg, rgba(5, 8, 18, 0.78), rgba(5, 8, 18, 0.56) 45%, rgba(5, 8, 18, 0.78)),
-    linear-gradient(180deg, rgba(5, 8, 18, 0.28), rgba(5, 8, 18, 0.74));
+    radial-gradient(circle at 78% 15%, rgba(255, 242, 198, 0.08), transparent 24%),
+    radial-gradient(circle at 24% 80%, rgba(122, 108, 255, 0.12), transparent 34%),
+    linear-gradient(90deg, rgba(5, 8, 18, 0.84), rgba(5, 8, 18, 0.54) 48%, rgba(5, 8, 18, 0.76)),
+    linear-gradient(180deg, rgba(5, 8, 18, 0.24), rgba(5, 8, 18, 0.8));
   content: "";
 }
 
 .galaxy-layer {
   position: absolute;
+  z-index: 1;
   display: block;
   max-width: none;
   -webkit-user-select: none;
@@ -172,6 +193,7 @@ textarea:focus-visible {
   inset: 0;
   width: 100%;
   height: 100%;
+  filter: saturate(0.92) contrast(1.05);
   object-fit: cover;
   object-position: center top;
 }
@@ -185,6 +207,7 @@ textarea:focus-visible {
 }
 
 .galaxy-layer-top-flow {
+  z-index: 2;
   top: -80px;
   left: 72px;
   width: calc(100% - 96px);
@@ -194,12 +217,23 @@ textarea:focus-visible {
 }
 
 .galaxy-layer-orbit {
+  z-index: 2;
   right: -170px;
   top: -185px;
   width: 560px;
   height: 560px;
   object-fit: contain;
   mix-blend-mode: screen;
+}
+
+@keyframes galaxy-silk-drift {
+  from {
+    transform: scale(1.02) translate3d(-10px, -6px, 0);
+  }
+
+  to {
+    transform: scale(1.05) translate3d(12px, 8px, 0);
+  }
 }
 
 .app-shell {
@@ -353,22 +387,7 @@ textarea:focus-visible {
   color: var(--text);
 }
 
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .title-subtitle,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .kpi-card span,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .resource-copy small,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .resource-meta-column small,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .section-head span,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .setting-card p {
-  color: var(--muted);
-}
 
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .group-tabs button,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .secondary-action,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .wide-command,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .setting-list label,
-:root:is([data-theme="graphite-light"], [data-theme="sky-blue"], [data-theme="mint-light"]) .form-grid label {
-  color: var(--soft);
-}
 
 :root[data-theme="local-galaxy"] .topbar,
 :root[data-theme="local-galaxy"] .search-shell,
@@ -492,6 +511,562 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
+:root[data-theme="local-galaxy"] {
+  --asset-silk-depth: url("../design/local-galaxy/assets/generated/local-galaxy-silk-depth.png");
+  --field: rgba(255, 242, 198, 0.045);
+  --field-strong: rgba(39, 215, 198, 0.075);
+  --line-focus: rgba(39, 215, 198, 0.58);
+  --shadow-card: 0 18px 52px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 242, 198, 0.025);
+  --shadow-elevated: 0 28px 100px rgba(0, 0, 0, 0.58), 0 0 46px rgba(39, 215, 198, 0.1);
+  --lg-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --lg-panel-bg:
+    radial-gradient(circle at 92% 0%, rgba(214, 168, 92, 0.12), transparent 34%),
+    radial-gradient(circle at 8% 100%, rgba(39, 215, 198, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(17, 25, 45, 0.88), rgba(7, 12, 25, 0.82));
+  --lg-card-bg:
+    radial-gradient(circle at 86% 12%, rgba(214, 168, 92, 0.08), transparent 32%),
+    linear-gradient(180deg, rgba(15, 23, 41, 0.82), rgba(8, 13, 27, 0.72));
+  --lg-panel-border: rgba(214, 168, 92, 0.22);
+  --lg-panel-border-strong: rgba(214, 168, 92, 0.38);
+}
+
+:root[data-theme="local-galaxy"] .app-shell {
+  background:
+    radial-gradient(circle at 78% 16%, rgba(214, 168, 92, 0.08), transparent 28%),
+    radial-gradient(circle at 28% 76%, rgba(39, 215, 198, 0.08), transparent 30%),
+    var(--bg-deep);
+}
+
+:root[data-theme="local-galaxy"] .window-titlebar {
+  border-bottom-color: rgba(214, 168, 92, 0.16);
+  background:
+    linear-gradient(90deg, rgba(5, 8, 18, 0.92), rgba(12, 18, 34, 0.82), rgba(5, 8, 18, 0.9));
+  box-shadow: inset 0 -1px 0 rgba(39, 215, 198, 0.06);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+:root[data-theme="local-galaxy"] .window-brand {
+  color: var(--text-soft);
+  text-shadow: 0 0 14px rgba(255, 242, 198, 0.16);
+}
+
+:root[data-theme="local-galaxy"] .window-controls button {
+  color: rgba(201, 191, 168, 0.78);
+  transition: background 160ms var(--lg-ease), color 160ms var(--lg-ease);
+}
+
+:root[data-theme="local-galaxy"] .window-controls button:hover {
+  background: rgba(39, 215, 198, 0.1);
+  color: var(--text);
+}
+
+:root[data-theme="local-galaxy"] .sidebar {
+  border-right-color: rgba(214, 168, 92, 0.16);
+  background:
+    radial-gradient(circle at 50% 2%, rgba(214, 168, 92, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(8, 12, 23, 0.96), rgba(5, 8, 18, 0.88));
+  box-shadow:
+    inset -1px 0 0 rgba(255, 242, 198, 0.035),
+    12px 0 36px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme="local-galaxy"] .brand-mark {
+  position: relative;
+  isolation: isolate;
+}
+
+:root[data-theme="local-galaxy"] .brand-mark::before,
+:root[data-theme="local-galaxy"] .brand-mark::after {
+  position: absolute;
+  content: "";
+  pointer-events: none;
+}
+
+:root[data-theme="local-galaxy"] .brand-mark::before {
+  inset: -22px -10px 12px;
+  z-index: -1;
+  background: var(--asset-gold-glow) center / contain no-repeat;
+  mix-blend-mode: screen;
+  opacity: 0.18;
+}
+
+:root[data-theme="local-galaxy"] .brand-mark::after {
+  display: none;
+}
+
+:root[data-theme="local-galaxy"] .brand-orbit {
+  border-color: rgba(214, 168, 92, 0.38);
+  background:
+    radial-gradient(circle at 34% 26%, rgba(255, 242, 198, 0.22), transparent 24%),
+    linear-gradient(145deg, rgba(39, 215, 198, 0.16), rgba(122, 108, 255, 0.12));
+  box-shadow:
+    0 0 24px rgba(214, 168, 92, 0.16),
+    inset 0 1px 0 rgba(255, 242, 198, 0.14);
+}
+
+:root[data-theme="local-galaxy"] .brand-mark strong,
+:root[data-theme="local-galaxy"] .topbar h1,
+:root[data-theme="local-galaxy"] .section-head h2,
+:root[data-theme="local-galaxy"] .setting-card h2,
+:root[data-theme="local-galaxy"] .panel-card h2,
+:root[data-theme="local-galaxy"] .modal-head h2 {
+  text-shadow: 0 2px 18px rgba(39, 215, 198, 0.1);
+}
+
+:root[data-theme="local-galaxy"] .brand-mark span,
+:root[data-theme="local-galaxy"] .title-subtitle,
+:root[data-theme="local-galaxy"] .resource-copy small,
+:root[data-theme="local-galaxy"] .resource-meta-column small,
+:root[data-theme="local-galaxy"] .theme-card small,
+:root[data-theme="local-galaxy"] .plugin-card span {
+  color: rgba(201, 191, 168, 0.78);
+}
+
+:root[data-theme="local-galaxy"] .eyebrow {
+  color: var(--gold);
+  text-shadow: 0 0 12px rgba(214, 168, 92, 0.24);
+}
+
+:root[data-theme="local-galaxy"] .topbar,
+:root[data-theme="local-galaxy"] .kpi-card,
+:root[data-theme="local-galaxy"] .metric-strip span,
+:root[data-theme="local-galaxy"] .surface-panel,
+:root[data-theme="local-galaxy"] .setting-card,
+:root[data-theme="local-galaxy"] .command-palette,
+:root[data-theme="local-galaxy"] .modal-panel,
+:root[data-theme="local-galaxy"] .settings-menu {
+  border-color: var(--lg-panel-border);
+  background: var(--lg-panel-bg);
+  box-shadow:
+    var(--shadow-card),
+    inset 0 1px 0 rgba(255, 242, 198, 0.07);
+  -webkit-backdrop-filter: blur(22px) saturate(1.08);
+  backdrop-filter: blur(22px) saturate(1.08);
+}
+
+:root[data-theme="local-galaxy"] .topbar {
+  min-height: 72px;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--lg-panel-border);
+  border-radius: var(--radius);
+}
+
+:root[data-theme="local-galaxy"] .topbar h1 {
+  font-family: var(--font-title);
+  font-size: 28px;
+  letter-spacing: 0.01em;
+}
+
+:root[data-theme="local-galaxy"] .rail-button,
+:root[data-theme="local-galaxy"] .icon-action,
+:root[data-theme="local-galaxy"] .mini-panel,
+:root[data-theme="local-galaxy"] .search-shell,
+:root[data-theme="local-galaxy"] .secondary-action,
+:root[data-theme="local-galaxy"] .wide-command,
+:root[data-theme="local-galaxy"] .switch-button,
+:root[data-theme="local-galaxy"] .batch-toolbar,
+:root[data-theme="local-galaxy"] .batch-toolbar button,
+:root[data-theme="local-galaxy"] .batch-toolbar select,
+:root[data-theme="local-galaxy"] .setting-list input,
+:root[data-theme="local-galaxy"] .setting-list select,
+:root[data-theme="local-galaxy"] .form-grid input,
+:root[data-theme="local-galaxy"] .form-grid select,
+:root[data-theme="local-galaxy"] .form-grid textarea,
+:root[data-theme="local-galaxy"] .backup-panel textarea,
+:root[data-theme="local-galaxy"] .dialog-body input,
+:root[data-theme="local-galaxy"] .dialog-body select,
+:root[data-theme="local-galaxy"] .path-list code {
+  border-color: rgba(255, 242, 198, 0.13);
+  background:
+    linear-gradient(180deg, rgba(255, 242, 198, 0.052), rgba(39, 215, 198, 0.025)),
+    rgba(5, 8, 18, 0.34);
+}
+
+:root[data-theme="local-galaxy"] .rail-button,
+:root[data-theme="local-galaxy"] .icon-action,
+:root[data-theme="local-galaxy"] .primary-action,
+:root[data-theme="local-galaxy"] .secondary-action,
+:root[data-theme="local-galaxy"] .wide-command,
+:root[data-theme="local-galaxy"] .switch-button,
+:root[data-theme="local-galaxy"] .group-tabs button,
+:root[data-theme="local-galaxy"] .settings-menu button,
+:root[data-theme="local-galaxy"] .resource-row,
+:root[data-theme="local-galaxy"] .theme-card,
+:root[data-theme="local-galaxy"] .plugin-card,
+:root[data-theme="local-galaxy"] .data-row,
+:root[data-theme="local-galaxy"] .log-row {
+  transition:
+    transform 180ms var(--lg-ease),
+    border-color 180ms var(--lg-ease),
+    background 180ms var(--lg-ease),
+    box-shadow 180ms var(--lg-ease),
+    color 180ms var(--lg-ease);
+}
+
+:root[data-theme="local-galaxy"] .rail-button:hover,
+:root[data-theme="local-galaxy"] .icon-action:hover,
+:root[data-theme="local-galaxy"] .rail-button.active {
+  border-color: rgba(39, 215, 198, 0.38);
+  background:
+    radial-gradient(circle at 50% 16%, rgba(39, 215, 198, 0.2), transparent 58%),
+    rgba(39, 215, 198, 0.07);
+  color: var(--teal-soft);
+  box-shadow: 0 0 20px rgba(39, 215, 198, 0.1);
+}
+
+:root[data-theme="local-galaxy"] .rail-button:hover,
+:root[data-theme="local-galaxy"] .icon-action:hover,
+:root[data-theme="local-galaxy"] .secondary-action:hover,
+:root[data-theme="local-galaxy"] .wide-command:hover,
+:root[data-theme="local-galaxy"] .switch-button:hover {
+  transform: translateY(-1px);
+}
+
+:root[data-theme="local-galaxy"] .mini-panel {
+  box-shadow: inset 0 1px 0 rgba(255, 242, 198, 0.06);
+}
+
+:root[data-theme="local-galaxy"] .mini-panel strong {
+  color: var(--gold);
+  text-shadow: 0 0 14px rgba(214, 168, 92, 0.22);
+}
+
+:root[data-theme="local-galaxy"] .search-shell {
+  height: 48px;
+  border-color: rgba(214, 168, 92, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 242, 198, 0.055);
+}
+
+:root[data-theme="local-galaxy"] .search-shell:focus-within {
+  border-color: rgba(39, 215, 198, 0.66);
+  background:
+    linear-gradient(180deg, rgba(39, 215, 198, 0.09), rgba(255, 242, 198, 0.04)),
+    rgba(5, 8, 18, 0.44);
+  box-shadow:
+    0 0 0 3px rgba(39, 215, 198, 0.1),
+    0 0 34px rgba(39, 215, 198, 0.14);
+}
+
+:root[data-theme="local-galaxy"] .primary-action {
+  border-color: rgba(39, 215, 198, 0.56);
+  background:
+    radial-gradient(circle at 24% 0%, rgba(255, 242, 198, 0.36), transparent 32%),
+    linear-gradient(135deg, rgba(39, 215, 198, 0.96), rgba(19, 139, 143, 0.94) 58%, rgba(214, 168, 92, 0.82));
+  box-shadow:
+    0 14px 34px rgba(39, 215, 198, 0.16),
+    inset 0 1px 0 rgba(255, 242, 198, 0.28);
+}
+
+:root[data-theme="local-galaxy"] .primary-action:hover {
+  border-color: rgba(255, 242, 198, 0.62);
+  box-shadow:
+    0 18px 42px rgba(39, 215, 198, 0.22),
+    0 0 28px rgba(214, 168, 92, 0.12),
+    inset 0 1px 0 rgba(255, 242, 198, 0.34);
+}
+
+:root[data-theme="local-galaxy"] .secondary-action:hover,
+:root[data-theme="local-galaxy"] .wide-command:hover,
+:root[data-theme="local-galaxy"] .switch-button:hover {
+  border-color: rgba(39, 215, 198, 0.38);
+  background:
+    linear-gradient(180deg, rgba(39, 215, 198, 0.09), rgba(214, 168, 92, 0.035)),
+    rgba(5, 8, 18, 0.36);
+  color: var(--text);
+  box-shadow: 0 0 20px rgba(39, 215, 198, 0.08);
+}
+
+:root[data-theme="local-galaxy"] .group-tabs button,
+:root[data-theme="local-galaxy"] .settings-menu button {
+  border-color: rgba(255, 242, 198, 0.1);
+  background: rgba(255, 242, 198, 0.025);
+}
+
+:root[data-theme="local-galaxy"] .group-tabs button:hover,
+:root[data-theme="local-galaxy"] .group-tabs button.selected,
+:root[data-theme="local-galaxy"] .settings-menu button:hover,
+:root[data-theme="local-galaxy"] .settings-menu button.active {
+  border-color: rgba(39, 215, 198, 0.4);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(39, 215, 198, 0.16), transparent 56%),
+    rgba(39, 215, 198, 0.07);
+  color: var(--text);
+  box-shadow: inset 0 1px 0 rgba(255, 242, 198, 0.06);
+}
+
+:root[data-theme="local-galaxy"] .kpi-card,
+:root[data-theme="local-galaxy"] .resource-row,
+:root[data-theme="local-galaxy"] .status-card,
+:root[data-theme="local-galaxy"] .theme-card,
+:root[data-theme="local-galaxy"] .plugin-card,
+:root[data-theme="local-galaxy"] .data-row,
+:root[data-theme="local-galaxy"] .log-row,
+:root[data-theme="local-galaxy"] .toast-line {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(255, 242, 198, 0.13);
+  background: var(--lg-card-bg);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.26),
+    inset 0 1px 0 rgba(255, 242, 198, 0.05);
+}
+
+:root[data-theme="local-galaxy"] .resource-row::before,
+:root[data-theme="local-galaxy"] .theme-card::before,
+:root[data-theme="local-galaxy"] .plugin-card::before,
+:root[data-theme="local-galaxy"] .data-row::before,
+:root[data-theme="local-galaxy"] .log-row::before,
+:root[data-theme="local-galaxy"] .toast-line::before {
+  position: absolute;
+  inset: -20%;
+  z-index: 0;
+  background: var(--asset-silk-depth) 68% 26% / 260% auto no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.055;
+  pointer-events: none;
+  transition: opacity 180ms var(--lg-ease), transform 180ms var(--lg-ease);
+}
+
+:root[data-theme="local-galaxy"] .resource-row::after,
+:root[data-theme="local-galaxy"] .theme-card::after,
+:root[data-theme="local-galaxy"] .plugin-card::after {
+  position: absolute;
+  right: -54px;
+  top: -54px;
+  width: 140px;
+  height: 140px;
+  background:
+    radial-gradient(circle, rgba(214, 168, 92, 0.14), transparent 58%),
+    var(--asset-panel-corner) right top / 72px 72px no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+:root[data-theme="local-galaxy"] .resource-row > *,
+:root[data-theme="local-galaxy"] .theme-card > *,
+:root[data-theme="local-galaxy"] .plugin-card > *,
+:root[data-theme="local-galaxy"] .data-row > *,
+:root[data-theme="local-galaxy"] .log-row > *,
+:root[data-theme="local-galaxy"] .toast-line > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-theme="local-galaxy"] .resource-row:hover,
+:root[data-theme="local-galaxy"] .resource-row.selected,
+:root[data-theme="local-galaxy"] .theme-card:hover,
+:root[data-theme="local-galaxy"] .theme-card.selected,
+:root[data-theme="local-galaxy"] .plugin-card:hover,
+:root[data-theme="local-galaxy"] .data-row:hover,
+:root[data-theme="local-galaxy"] .log-row:hover {
+  transform: translateY(-2px);
+  border-color: rgba(39, 215, 198, 0.42);
+  background:
+    radial-gradient(circle at 86% 8%, rgba(214, 168, 92, 0.12), transparent 34%),
+    radial-gradient(circle at 0% 100%, rgba(39, 215, 198, 0.1), transparent 32%),
+    linear-gradient(180deg, rgba(18, 29, 51, 0.9), rgba(8, 15, 31, 0.82));
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.34),
+    0 0 28px rgba(39, 215, 198, 0.1),
+    inset 0 1px 0 rgba(255, 242, 198, 0.08);
+}
+
+:root[data-theme="local-galaxy"] .resource-row:hover::before,
+:root[data-theme="local-galaxy"] .resource-row.selected::before,
+:root[data-theme="local-galaxy"] .theme-card:hover::before,
+:root[data-theme="local-galaxy"] .theme-card.selected::before,
+:root[data-theme="local-galaxy"] .plugin-card:hover::before,
+:root[data-theme="local-galaxy"] .data-row:hover::before,
+:root[data-theme="local-galaxy"] .log-row:hover::before {
+  opacity: 0.12;
+  transform: translate3d(8px, -6px, 0) scale(1.04);
+}
+
+:root[data-theme="local-galaxy"] .resource-icon,
+:root[data-theme="local-galaxy"] .result-icon,
+:root[data-theme="local-galaxy"] .status-icon {
+  border-color: rgba(39, 215, 198, 0.3);
+  background-image:
+    var(--asset-icon-base, none),
+    radial-gradient(circle at 50% 36%, rgba(255, 242, 198, 0.22), transparent 30%),
+    radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--accent, var(--teal)) 24%, transparent), transparent 52%),
+    linear-gradient(145deg, rgba(39, 215, 198, 0.08), rgba(122, 108, 255, 0.08));
+  box-shadow:
+    0 0 20px color-mix(in srgb, var(--accent, var(--teal)) 18%, transparent),
+    inset 0 1px 0 rgba(255, 242, 198, 0.1);
+}
+
+:root[data-theme="local-galaxy"] .resource-row:hover .resource-icon,
+:root[data-theme="local-galaxy"] .palette-results button:hover .result-icon {
+  border-color: rgba(255, 242, 198, 0.36);
+  transform: translateY(-1px);
+}
+
+:root[data-theme="local-galaxy"] .tile-actions {
+  border-top-color: rgba(214, 168, 92, 0.16);
+  background: rgba(5, 8, 18, 0.18);
+}
+
+:root[data-theme="local-galaxy"] .tile-actions button:hover {
+  border-color: rgba(39, 215, 198, 0.28);
+  background: rgba(39, 215, 198, 0.09);
+  color: var(--teal-soft);
+}
+
+:root[data-theme="local-galaxy"] .favorite-action.is-favorite {
+  color: var(--star);
+  filter: drop-shadow(0 0 8px rgba(214, 168, 92, 0.42));
+}
+
+:root[data-theme="local-galaxy"] .kpi-card strong,
+:root[data-theme="local-galaxy"] .metric-strip strong {
+  color: var(--star);
+  text-shadow: 0 0 18px rgba(214, 168, 92, 0.2);
+}
+
+:root[data-theme="local-galaxy"] .kpi-card:nth-child(even) strong {
+  color: var(--teal-soft);
+  text-shadow: 0 0 18px rgba(39, 215, 198, 0.22);
+}
+
+:root[data-theme="local-galaxy"] .status-card::after {
+  right: 4px;
+  bottom: 0;
+  width: 76px;
+  height: 76px;
+  opacity: 0.3;
+}
+
+:root[data-theme="local-galaxy"] .operations-panel .status-card:nth-child(2)::after {
+  background-image: var(--asset-astrolabe);
+  opacity: 0.16;
+}
+
+:root[data-theme="local-galaxy"] .settings-menu::after {
+  width: 190px;
+  height: 190px;
+  opacity: 0.18;
+}
+
+:root[data-theme="local-galaxy"] .logs-panel::before {
+  inset: var(--space-2);
+  border-radius: var(--radius);
+  opacity: 0.16;
+}
+
+:root[data-theme="local-galaxy"] .empty-state,
+:root[data-theme="local-galaxy"] .empty-copy {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(214, 168, 92, 0.28);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(39, 215, 198, 0.09), transparent 42%),
+    rgba(5, 8, 18, 0.24);
+}
+
+:root[data-theme="local-galaxy"] .empty-state::before,
+:root[data-theme="local-galaxy"] .empty-copy::before {
+  position: absolute;
+  inset: auto auto -74px 50%;
+  width: 220px;
+  height: 220px;
+  background: var(--asset-scan-orbit) center / contain no-repeat;
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.22;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+:root[data-theme="local-galaxy"] .empty-state > *,
+:root[data-theme="local-galaxy"] .empty-copy > * {
+  position: relative;
+  z-index: 1;
+}
+
+:root[data-theme="local-galaxy"] .palette-backdrop {
+  background:
+    radial-gradient(circle at 72% 18%, rgba(214, 168, 92, 0.14), transparent 26%),
+    radial-gradient(circle at 24% 84%, rgba(39, 215, 198, 0.12), transparent 30%),
+    rgba(5, 8, 18, 0.78);
+  -webkit-backdrop-filter: blur(20px) saturate(1.08);
+  backdrop-filter: blur(20px) saturate(1.08);
+}
+
+:root[data-theme="local-galaxy"] .command-palette,
+:root[data-theme="local-galaxy"] .modal-panel {
+  border-color: rgba(214, 168, 92, 0.28);
+  background:
+    linear-gradient(180deg, rgba(255, 242, 198, 0.04), rgba(39, 215, 198, 0.025)),
+    var(--lg-panel-bg);
+}
+
+:root[data-theme="local-galaxy"] .palette-input,
+:root[data-theme="local-galaxy"] .modal-head,
+:root[data-theme="local-galaxy"] .modal-actions {
+  border-color: rgba(214, 168, 92, 0.16);
+}
+
+:root[data-theme="local-galaxy"] .palette-results button:hover {
+  border-color: rgba(39, 215, 198, 0.34);
+  background:
+    radial-gradient(circle at 8% 50%, rgba(39, 215, 198, 0.12), transparent 34%),
+    rgba(39, 215, 198, 0.055);
+}
+
+:root[data-theme="local-galaxy"] .context-menu {
+  border-color: rgba(214, 168, 92, 0.26);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(214, 168, 92, 0.14), transparent 42%),
+    linear-gradient(180deg, rgba(13, 20, 37, 0.98), rgba(5, 8, 18, 0.96));
+  box-shadow:
+    0 20px 62px rgba(0, 0, 0, 0.5),
+    0 0 28px rgba(39, 215, 198, 0.08),
+    inset 0 1px 0 rgba(255, 242, 198, 0.08);
+}
+
+:root[data-theme="local-galaxy"] .context-menu button:hover:not(:disabled) {
+  background:
+    linear-gradient(90deg, rgba(39, 215, 198, 0.14), rgba(214, 168, 92, 0.05));
+  color: var(--text);
+}
+
+:root[data-theme="local-galaxy"] ::-webkit-scrollbar-track {
+  background: rgba(5, 8, 18, 0.42);
+}
+
+:root[data-theme="local-galaxy"] ::-webkit-scrollbar-thumb {
+  border-color: rgba(5, 8, 18, 0.78);
+  background:
+    linear-gradient(180deg, rgba(214, 168, 92, 0.58), rgba(39, 215, 198, 0.46));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .local-galaxy-backdrop::before {
+    animation: none;
+  }
+
+  :root[data-theme="local-galaxy"] .rail-button,
+  :root[data-theme="local-galaxy"] .icon-action,
+  :root[data-theme="local-galaxy"] .primary-action,
+  :root[data-theme="local-galaxy"] .secondary-action,
+  :root[data-theme="local-galaxy"] .wide-command,
+  :root[data-theme="local-galaxy"] .switch-button,
+  :root[data-theme="local-galaxy"] .group-tabs button,
+  :root[data-theme="local-galaxy"] .settings-menu button,
+  :root[data-theme="local-galaxy"] .resource-row,
+  :root[data-theme="local-galaxy"] .theme-card,
+  :root[data-theme="local-galaxy"] .plugin-card,
+  :root[data-theme="local-galaxy"] .data-row,
+  :root[data-theme="local-galaxy"] .log-row {
+    transition-duration: 0ms;
+  }
+}
+
 .drop-overlay {
   position: fixed !important;
   inset: 42px 18px 18px 104px;
@@ -556,6 +1131,7 @@ textarea:focus-visible {
   width: 16px;
   height: 16px;
   border-radius: 4px;
+  object-fit: contain;
 }
 
 .window-brand-glyph {
@@ -570,6 +1146,7 @@ textarea:focus-visible {
   width: 16px;
   height: 16px;
   border-radius: 4px;
+  object-fit: contain;
 }
 
 .window-drag-fill {
@@ -660,7 +1237,7 @@ textarea:focus-visible {
 .brand-orbit img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .brand-orbit svg {
@@ -1191,6 +1768,27 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.resource-group-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resource-group-tags em {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--soft);
+  background: var(--surface-soft);
+  font-size: 11px;
+  font-style: normal;
 }
 
 .resource-meta-column {
@@ -2155,42 +2753,42 @@ kbd {
 
 
 /* Atelier Zero (Warm Editorial) Theme Overrides */
-:root[data-theme="atelier-zero"] {
+:root[data-theme-style="atelier"] {
   --elev-raised: 0 8px 24px rgba(32, 25, 20, 0.08);
 }
 
 /* 1. Typography */
-:root[data-theme="atelier-zero"] h1,
-:root[data-theme="atelier-zero"] h2,
-:root[data-theme="atelier-zero"] h3,
-:root[data-theme="atelier-zero"] .topbar h1,
-:root[data-theme="atelier-zero"] .setting-card h2,
-:root[data-theme="atelier-zero"] .panel-card h2,
-:root[data-theme="atelier-zero"] .modal-head h2,
-:root[data-theme="atelier-zero"] .kpi-card strong {
+:root[data-theme-style="atelier"] h1,
+:root[data-theme-style="atelier"] h2,
+:root[data-theme-style="atelier"] h3,
+:root[data-theme-style="atelier"] .topbar h1,
+:root[data-theme-style="atelier"] .setting-card h2,
+:root[data-theme-style="atelier"] .panel-card h2,
+:root[data-theme-style="atelier"] .modal-head h2,
+:root[data-theme-style="atelier"] .kpi-card strong {
   font-family: var(--font-title), Georgia, "Times New Roman", serif !important;
 }
 
-:root[data-theme="atelier-zero"] body,
-:root[data-theme="atelier-zero"] button,
-:root[data-theme="atelier-zero"] input,
-:root[data-theme="atelier-zero"] select,
-:root[data-theme="atelier-zero"] textarea {
+:root[data-theme-style="atelier"] body,
+:root[data-theme-style="atelier"] button,
+:root[data-theme-style="atelier"] input,
+:root[data-theme-style="atelier"] select,
+:root[data-theme-style="atelier"] textarea {
   font-family: var(--font-body), Inter, system-ui, sans-serif !important;
 }
 
-:root[data-theme="atelier-zero"] .brand-mark strong,
-:root[data-theme="atelier-zero"] .brand-mark span {
+:root[data-theme-style="atelier"] .brand-mark strong,
+:root[data-theme-style="atelier"] .brand-mark span {
   font-family: var(--font-body), Inter, sans-serif !important;
 }
 
-:root[data-theme="atelier-zero"] .eyebrow {
+:root[data-theme-style="atelier"] .eyebrow {
   color: var(--accent) !important;
   font-family: var(--font-ui), Inter, system-ui, sans-serif !important;
 }
 
 /* 2. Primary Buttons, Menu Items & Selected Tabs */
-:root[data-theme="atelier-zero"] .primary-action {
+:root[data-theme-style="atelier"] .primary-action {
   background: var(--accent) !important;
   color: var(--bg) !important;
   border: 1px solid var(--accent) !important;
@@ -2198,7 +2796,7 @@ kbd {
   background-image: none !important;
 }
 
-:root[data-theme="atelier-zero"] .primary-action:hover {
+:root[data-theme-style="atelier"] .primary-action:hover {
   background: var(--accent) !important;
   color: var(--bg) !important;
   border-color: var(--accent) !important;
@@ -2206,183 +2804,643 @@ kbd {
   transform: none !important;
 }
 
-:root[data-theme="atelier-zero"] .secondary-action,
-:root[data-theme="atelier-zero"] .wide-command {
+:root[data-theme-style="atelier"] .secondary-action,
+:root[data-theme-style="atelier"] .wide-command {
   background: var(--surface) !important;
   border: 1px solid var(--line-strong) !important;
   color: var(--soft) !important;
 }
 
-:root[data-theme="atelier-zero"] .secondary-action:hover,
-:root[data-theme="atelier-zero"] .wide-command:hover {
+:root[data-theme-style="atelier"] .secondary-action:hover,
+:root[data-theme-style="atelier"] .wide-command:hover {
   background: var(--surface-soft) !important;
   border: 1px solid var(--accent) !important;
   color: var(--text) !important;
 }
 
-:root[data-theme="atelier-zero"] .danger-action {
+:root[data-theme-style="atelier"] .danger-action {
   background: var(--danger) !important;
   color: #ffffff !important;
   border: 1px solid var(--danger) !important;
 }
 
-:root[data-theme="atelier-zero"] .group-tabs button {
+:root[data-theme-style="atelier"] .group-tabs button {
   background: var(--surface) !important;
   border-color: var(--line) !important;
 }
 
-:root[data-theme="atelier-zero"] .group-tabs button.selected {
+:root[data-theme-style="atelier"] .group-tabs button.selected {
   background: var(--accent) !important;
   color: #ffffff !important;
   border-color: var(--accent) !important;
 }
 
-:root[data-theme="atelier-zero"] .settings-menu button.active {
+:root[data-theme-style="atelier"] .settings-menu button.active {
   background: var(--surface-soft) !important;
   color: var(--accent) !important;
 }
 
-:root[data-theme="atelier-zero"] .rail-button.active {
+:root[data-theme-style="atelier"] .rail-button.active {
   background: var(--surface) !important;
   border: 1px solid var(--line-strong) !important;
   color: var(--accent) !important;
 }
 
 /* Hover behaviors for rail, menu, and group tab buttons */
-:root[data-theme="atelier-zero"] .rail-button:hover,
-:root[data-theme="atelier-zero"] .settings-menu button:hover,
-:root[data-theme="atelier-zero"] .group-tabs button:hover:not(.selected) {
+:root[data-theme-style="atelier"] .rail-button:hover,
+:root[data-theme-style="atelier"] .settings-menu button:hover,
+:root[data-theme-style="atelier"] .group-tabs button:hover:not(.selected) {
   background: var(--surface-soft) !important;
   color: var(--text) !important;
   border-color: var(--line-strong) !important;
 }
 
-:root[data-theme="atelier-zero"] .window-controls button:hover {
+:root[data-theme-style="atelier"] .window-controls button:hover {
   background: var(--surface-soft) !important;
   color: var(--text) !important;
 }
 
 /* 3. Division Borders & Cards Style */
-:root[data-theme="atelier-zero"] .sidebar {
+:root[data-theme-style="atelier"] .sidebar {
   background: var(--bg) !important;
   box-shadow: none !important;
 }
 
-:root[data-theme="atelier-zero"] .mini-panel {
+:root[data-theme-style="atelier"] .mini-panel {
   background: var(--surface) !important;
   border-color: var(--line) !important;
 }
 
-:root[data-theme="atelier-zero"] .kpi-card,
-:root[data-theme="atelier-zero"] .surface-panel,
-:root[data-theme="atelier-zero"] .setting-card,
-:root[data-theme="atelier-zero"] .panel-card,
-:root[data-theme="atelier-zero"] .status-card,
-:root[data-theme="atelier-zero"] .settings-menu,
-:root[data-theme="atelier-zero"] .about-stats span,
-:root[data-theme="atelier-zero"] .demo-box,
-:root[data-theme="atelier-zero"] .resource-row,
-:root[data-theme="atelier-zero"] .toast-line,
-:root[data-theme="atelier-zero"] .batch-toolbar {
+:root[data-theme-style="atelier"] .kpi-card,
+:root[data-theme-style="atelier"] .surface-panel,
+:root[data-theme-style="atelier"] .setting-card,
+:root[data-theme-style="atelier"] .panel-card,
+:root[data-theme-style="atelier"] .status-card,
+:root[data-theme-style="atelier"] .settings-menu,
+:root[data-theme-style="atelier"] .about-stats span,
+:root[data-theme-style="atelier"] .demo-box,
+:root[data-theme-style="atelier"] .resource-row,
+:root[data-theme-style="atelier"] .toast-line,
+:root[data-theme-style="atelier"] .batch-toolbar {
   border: 1px solid var(--line) !important;
   box-shadow: none !important;
   border-radius: var(--radius) !important;
 }
 
-:root[data-theme="atelier-zero"] .kpi-card,
-:root[data-theme="atelier-zero"] .surface-panel {
+:root[data-theme-style="atelier"] .kpi-card,
+:root[data-theme-style="atelier"] .surface-panel {
   border: 1px solid var(--line-strong) !important;
   background: var(--surface) !important;
 }
 
 /* 4. Hover card style for resource-row */
-:root[data-theme="atelier-zero"] .resource-row:hover {
+:root[data-theme-style="atelier"] .resource-row:hover {
   background: var(--surface) !important;
   border-color: var(--accent-2) !important;
   box-shadow: var(--elev-raised) !important;
 }
 
-:root[data-theme="atelier-zero"] .resource-row.selected {
+:root[data-theme-style="atelier"] .resource-row.selected {
   border-color: var(--accent-2) !important;
 }
 
 /* 5. Inputs & Fields styling */
-:root[data-theme="atelier-zero"] .setting-list input,
-:root[data-theme="atelier-zero"] .setting-list select,
-:root[data-theme="atelier-zero"] .form-grid input,
-:root[data-theme="atelier-zero"] .form-grid select,
-:root[data-theme="atelier-zero"] .form-grid textarea,
-:root[data-theme="atelier-zero"] .backup-panel textarea,
-:root[data-theme="atelier-zero"] .dialog-body input,
-:root[data-theme="atelier-zero"] .dialog-body select {
+:root[data-theme-style="atelier"] .setting-list input,
+:root[data-theme-style="atelier"] .setting-list select,
+:root[data-theme-style="atelier"] .form-grid input,
+:root[data-theme-style="atelier"] .form-grid select,
+:root[data-theme-style="atelier"] .form-grid textarea,
+:root[data-theme-style="atelier"] .backup-panel textarea,
+:root[data-theme-style="atelier"] .dialog-body input,
+:root[data-theme-style="atelier"] .dialog-body select {
   border: 1px solid var(--line) !important;
   background: var(--surface) !important;
   color: var(--text) !important;
   border-radius: var(--radius-sm) !important;
 }
 
-:root[data-theme="atelier-zero"] .search-shell {
+:root[data-theme-style="atelier"] .search-shell {
   border: 1px solid var(--line-strong) !important;
   background: var(--surface) !important;
   box-shadow: none !important;
 }
 
-:root[data-theme="atelier-zero"] .search-shell:focus-within {
+:root[data-theme-style="atelier"] .search-shell:focus-within {
   border-color: var(--accent) !important;
 }
 
-:root[data-theme="atelier-zero"] kbd {
+:root[data-theme-style="atelier"] kbd {
   background: var(--surface-soft) !important;
   border: 1px solid var(--line) !important;
   color: var(--muted) !important;
 }
 
-:root[data-theme="atelier-zero"] input:focus-visible,
-:root[data-theme="atelier-zero"] select:focus-visible,
-:root[data-theme="atelier-zero"] textarea:focus-visible {
+:root[data-theme-style="atelier"] input:focus-visible,
+:root[data-theme-style="atelier"] select:focus-visible,
+:root[data-theme-style="atelier"] textarea:focus-visible {
   outline: 1px solid var(--line-focus) !important;
   box-shadow: var(--focus-ring) !important;
 }
 
-:root[data-theme="atelier-zero"] option {
+:root[data-theme-style="atelier"] option {
   background: var(--surface) !important;
   color: var(--text) !important;
 }
 
 /* 6. Icons & brand mark adjustments */
-:root[data-theme="atelier-zero"] .brand-orbit {
+:root[data-theme-style="atelier"] .brand-orbit {
   background: var(--surface) !important;
   border: 1px solid var(--line) !important;
   color: var(--accent) !important;
 }
 
-:root[data-theme="atelier-zero"] .resource-icon,
-:root[data-theme="atelier-zero"] .result-icon,
-:root[data-theme="atelier-zero"] .status-icon {
+:root[data-theme-style="atelier"] .resource-icon,
+:root[data-theme-style="atelier"] .result-icon {
   background: var(--surface-soft) !important;
   background-image: none !important;
   border: 1px solid var(--line-strong) !important;
-  color: var(--accent) !important;
+  color: var(--theme-accent) !important;
 }
 
-:root[data-theme="atelier-zero"] .path-list code {
+:root[data-theme-style="atelier"] .status-icon {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+  border: 1px solid var(--line-strong) !important;
+  color: var(--ok) !important;
+}
+
+:root[data-theme-style="atelier"] .path-list code {
   background: var(--surface-soft) !important;
   border: 1px solid var(--line-strong) !important;
   color: var(--text) !important;
 }
 
 /* 7. Purge local-galaxy decoration assets completely */
-:root[data-theme="atelier-zero"] .topbar::after,
-:root[data-theme="atelier-zero"] .search-shell::before,
-:root[data-theme="atelier-zero"] .group-tabs button.selected::before,
-:root[data-theme="atelier-zero"] .primary-action::after,
-:root[data-theme="atelier-zero"] .status-card::after,
-:root[data-theme="atelier-zero"] .settings-menu::after,
-:root[data-theme="atelier-zero"] .logs-panel::before,
-:root[data-theme="atelier-zero"] .resource-panel::after,
-:root[data-theme="atelier-zero"] .setting-card::after {
+:root[data-theme-style="atelier"] .topbar::after,
+:root[data-theme-style="atelier"] .search-shell::before,
+:root[data-theme-style="atelier"] .group-tabs button.selected::before,
+:root[data-theme-style="atelier"] .primary-action::after,
+:root[data-theme-style="atelier"] .status-card::after,
+:root[data-theme-style="atelier"] .settings-menu::after,
+:root[data-theme-style="atelier"] .logs-panel::before,
+:root[data-theme-style="atelier"] .resource-panel::after,
+:root[data-theme-style="atelier"] .setting-card::after {
   display: none !important;
   content: none !important;
+}
+
+/* ==========================================
+   CREATIVE MODE THEME (NEO-BRUTALIST STYLE)
+   ========================================== */
+
+/* 1. Typography Overrides */
+:root[data-theme="creative-mode"] h1,
+:root[data-theme="creative-mode"] h2,
+:root[data-theme="creative-mode"] h3,
+:root[data-theme="creative-mode"] .topbar h1,
+:root[data-theme="creative-mode"] .setting-card h2,
+:root[data-theme="creative-mode"] .panel-card h2,
+:root[data-theme="creative-mode"] .modal-head h2 {
+  font-family: var(--font-title), "Archivo Black", Impact, sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.02em !important;
+  font-weight: 900 !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] .kpi-card strong {
+  font-family: var(--font-title), "Archivo Black", Impact, sans-serif !important;
+  font-weight: 900 !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] body,
+:root[data-theme="creative-mode"] button,
+:root[data-theme="creative-mode"] input,
+:root[data-theme="creative-mode"] select,
+:root[data-theme="creative-mode"] textarea {
+  font-family: var(--font-body), Inter, system-ui, sans-serif !important;
+}
+
+:root[data-theme="creative-mode"] .brand-mark strong,
+:root[data-theme="creative-mode"] .brand-mark span {
+  font-family: var(--font-body), Inter, sans-serif !important;
+}
+
+:root[data-theme="creative-mode"] .eyebrow {
+  color: var(--accent-3) !important;
+  font-family: var(--font-mono), monospace !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em !important;
+}
+
+/* 2. Global Containers & Cards (Borders & Shadows) */
+:root[data-theme="creative-mode"] .sidebar {
+  background: var(--bg) !important;
+  border-right: 2px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="creative-mode"] .kpi-card,
+:root[data-theme="creative-mode"] .surface-panel,
+:root[data-theme="creative-mode"] .setting-card,
+:root[data-theme="creative-mode"] .panel-card,
+:root[data-theme="creative-mode"] .status-card,
+:root[data-theme="creative-mode"] .settings-menu,
+:root[data-theme="creative-mode"] .about-stats span,
+:root[data-theme="creative-mode"] .demo-box,
+:root[data-theme="creative-mode"] .resource-row,
+:root[data-theme="creative-mode"] .toast-line,
+:root[data-theme="creative-mode"] .batch-toolbar {
+  border: 2px solid var(--line) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+  background: var(--surface) !important;
+  transition: transform 100ms var(--ease-standard), box-shadow 100ms var(--ease-standard) !important;
+}
+
+:root[data-theme="creative-mode"] .mini-panel {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .mini-panel strong {
+  color: var(--accent-3) !important;
+  font-family: var(--font-mono), monospace !important;
+}
+
+/* 3. Interactive Cards Hover & Tactile Press */
+:root[data-theme="creative-mode"] .resource-row:hover {
+  background: var(--surface) !important;
+  border-color: var(--line) !important;
+  box-shadow: 6px 6px 0px var(--line) !important;
+  transform: translate(-2px, -2px) !important;
+}
+
+:root[data-theme="creative-mode"] .resource-row:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .resource-row.selected {
+  border-color: var(--accent-3) !important;
+  background: var(--surface-soft) !important;
+}
+
+/* 4. Action Buttons & Input Elements */
+:root[data-theme="creative-mode"] .primary-action {
+  background: var(--accent-2) !important; /* Pink */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  text-shadow: none !important;
+  background-image: none !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .primary-action:hover {
+  background: var(--accent-2) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+:root[data-theme="creative-mode"] .primary-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .secondary-action,
+:root[data-theme="creative-mode"] .wide-command {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .secondary-action:hover,
+:root[data-theme="creative-mode"] .wide-command:hover {
+  background: var(--surface-soft) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] .secondary-action:active,
+:root[data-theme="creative-mode"] .wide-command:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .danger-action {
+  background: var(--danger) !important; /* Orange/Red */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .danger-action:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+  font-weight: 700 !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button:hover {
+  background: var(--surface-soft) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button.on {
+  background: var(--accent) !important; /* Green */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button.on:hover {
+  background: var(--accent) !important;
+  box-shadow: 4px 4px 0px var(--line) !important;
+  transform: translate(-1px, -1px) !important;
+  color: #ffffff !important;
+}
+
+:root[data-theme="creative-mode"] .switch-button.on:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: 1px 1px 0px var(--line) !important;
+}
+
+
+/* 5. Navigation Rails, Group Tabs & Menu Buttons */
+:root[data-theme="creative-mode"] .group-tabs button {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+  color: var(--text) !important;
+  margin-right: 8px !important;
+  transition: transform 100ms ease, box-shadow 100ms ease !important;
+}
+
+:root[data-theme="creative-mode"] .group-tabs button:hover:not(.selected) {
+  background: var(--surface-soft) !important;
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .group-tabs button.selected {
+  background: var(--accent-2) !important; /* Pink */
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+  box-shadow: none !important;
+  transform: translate(2px, 2px) !important;
+}
+
+:root[data-theme="creative-mode"] .settings-menu button.active {
+  background: var(--accent) !important; /* Green */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="creative-mode"] .rail-button.active {
+  background: var(--accent) !important; /* Green */
+  border: 2px solid var(--line) !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+:root[data-theme="creative-mode"] .rail-button:hover,
+:root[data-theme="creative-mode"] .settings-menu button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+  border: 2px solid var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .window-controls button:hover {
+  background: var(--surface-soft) !important;
+  color: var(--text) !important;
+}
+
+/* 6. Inputs & Search Fields */
+:root[data-theme="creative-mode"] .setting-list input,
+:root[data-theme="creative-mode"] .setting-list select,
+:root[data-theme="creative-mode"] .form-grid input,
+:root[data-theme="creative-mode"] .form-grid select,
+:root[data-theme="creative-mode"] .form-grid textarea,
+:root[data-theme="creative-mode"] .backup-panel textarea,
+:root[data-theme="creative-mode"] .dialog-body input,
+:root[data-theme="creative-mode"] .dialog-body select {
+  border: 2px solid var(--line) !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="creative-mode"] .search-shell {
+  border: 2px solid var(--line) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-card) !important;
+  border-radius: var(--radius) !important;
+}
+
+:root[data-theme="creative-mode"] .search-shell:focus-within {
+  border-color: var(--line-focus) !important; /* Orange */
+}
+
+:root[data-theme="creative-mode"] kbd {
+  background: var(--surface-soft) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+:root[data-theme="creative-mode"] input:focus-visible,
+:root[data-theme="creative-mode"] select:focus-visible,
+:root[data-theme="creative-mode"] textarea:focus-visible {
+  outline: 2px solid var(--line-focus) !important;
+  box-shadow: var(--focus-ring) !important;
+}
+
+:root[data-theme="creative-mode"] option {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+}
+
+/* 7. Brand Orbit, Icons & Utilities */
+:root[data-theme="creative-mode"] .brand-orbit {
+  background: var(--surface) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--accent-3) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .resource-icon,
+:root[data-theme="creative-mode"] .result-icon,
+:root[data-theme="creative-mode"] .status-icon {
+  background: var(--surface-soft) !important;
+  background-image: none !important;
+  border: 2px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="creative-mode"] .path-list code {
+  background: var(--surface-soft) !important;
+  border: 2px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+/* 8. Purge local-galaxy decoration assets completely */
+:root[data-theme="creative-mode"] .topbar::after,
+:root[data-theme="creative-mode"] .search-shell::before,
+:root[data-theme="creative-mode"] .group-tabs button.selected::before,
+:root[data-theme="creative-mode"] .primary-action::after,
+:root[data-theme="creative-mode"] .status-card::after,
+:root[data-theme="creative-mode"] .settings-menu::after,
+:root[data-theme="creative-mode"] .logs-panel::before,
+:root[data-theme="creative-mode"] .resource-panel::after,
+:root[data-theme="creative-mode"] .setting-card::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* ==========================================
+   GLOBAL SETTINGS MODAL CONTAINER
+   ========================================== */
+.settings-modal-panel {
+  width: min(960px, calc(100vw - 32px)) !important;
+  height: min(700px, calc(100vh - 32px)) !important;
+  max-width: 95vw !important;
+  max-height: 90vh !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* ==========================================
+   CREATIVE MODE RED/GREEN & SPACING ENHANCEMENTS
+   ========================================== */
+
+/* Spacing between "详情" and "停用/启用" switch button */
+:root[data-theme="creative-mode"] .switch-button {
+  margin-left: 12px !important;
+}
+
+/* Settings Modal Overrides */
+:root[data-theme="creative-mode"] .settings-modal-panel {
+  border: 2px solid var(--line) !important;
+  box-shadow: var(--shadow-elevated) !important;
+  background: var(--bg) !important;
+  border-radius: var(--radius) !important;
+}
+
+/* Red/Green Scrollbar Styling */
+:root[data-theme="creative-mode"] ::-webkit-scrollbar-thumb {
+  background: var(--accent) !important; /* Green scrollbar */
+  border: 2px solid var(--line) !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+:root[data-theme="creative-mode"] ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-2) !important; /* Pink scrollbar on hover */
+}
+
+/* KPI Card Number Color Rotation */
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(1) strong {
+  color: var(--accent-2) !important; /* Pink/Red for total resources */
+}
+
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(2) strong {
+  color: var(--accent) !important; /* Green for enabled plugins */
+}
+
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(3) strong {
+  color: var(--accent-3) !important; /* Orange/Red for logs/warnings */
+}
+
+:root[data-theme="creative-mode"] .kpi-grid .kpi-card:nth-child(4) strong {
+  color: var(--warning) !important; /* Yellow for others */
+}
+
+/* Brand logo and text color adjustments */
+:root[data-theme="creative-mode"] .brand-orbit {
+  background: var(--accent-2) !important; /* Pink background for logo */
+  color: #ffffff !important;
+  border: 2px solid var(--line) !important;
+  box-shadow: 2px 2px 0px var(--line) !important;
+}
+
+:root[data-theme="creative-mode"] .brand-mark span {
+  color: var(--accent) !important; /* Green subtitle "Desktop" */
+  font-weight: 800 !important;
+}
+
+/* Favorite stars color in main interface */
+:root[data-theme="creative-mode"] .favorite-action.is-favorite {
+  color: var(--accent-2) !important; /* Pink favorite star */
+}
+
+/* Hovering resource icons triggers pink background micro-animation */
+:root[data-theme="creative-mode"] .resource-row:hover .resource-icon {
+  background: var(--accent-2) !important; /* Pink */
+  color: #ffffff !important;
+  border-color: var(--line) !important;
+}
+
+/* Creative Mode Card hover state color change */
+:root[data-theme="creative-mode"] .resource-row:hover {
+  background: #f7f0d5 !important;
+}
+
+/* Creative Mode action buttons hover states */
+:root[data-theme="creative-mode"] .tile-actions button {
+  border-right: 2px solid var(--line) !important;
+  color: var(--line) !important;
+  transition: background 120ms ease, color 120ms ease !important;
+}
+:root[data-theme="creative-mode"] .tile-actions button:hover {
+  color: #ffffff !important;
+}
+:root[data-theme="creative-mode"] .tile-actions button:nth-child(1):hover {
+  background: var(--warning) !important; /* Yellow for favorite */
+  color: #000000 !important;
+}
+:root[data-theme="creative-mode"] .tile-actions button:nth-child(2):hover {
+  background: var(--accent) !important; /* Green for edit */
+}
+:root[data-theme="creative-mode"] .tile-actions button:nth-child(3):hover {
+  background: var(--danger) !important; /* Red/Orange for delete */
+}
+
+/* ==========================================
+   GLOBAL ENGINE PLUGIN DISABLED STYLING
+   ========================================== */
+.plugin-card.is-disabled {
+  opacity: 0.55 !important;
+  border-style: dashed !important;
+  transition: opacity 160ms ease, border-style 160ms ease !important;
+}
+
+.plugin-card.is-disabled .switch-button {
+  border-style: solid !important;
 }
 
 /* ==========================================
@@ -3450,6 +4508,13 @@ kbd {
   color: var(--line) !important;
 }
 
+:root[data-theme="ink-blue"] .secondary-action span,
+:root[data-theme="ink-blue"] .wide-command span,
+:root[data-theme="ink-blue"] .toolbar-btn span,
+:root[data-theme="ink-blue"] .toolbar-btn {
+  color: var(--line) !important;
+}
+
 :root[data-theme="ink-blue"] .secondary-action:hover,
 :root[data-theme="ink-blue"] .wide-command:hover {
   background: var(--bg) !important;
@@ -3610,6 +4675,24 @@ kbd {
 
 :root[data-theme="ink-blue"] .search-shell:focus-within {
   border-color: var(--accent) !important;
+}
+
+:root[data-theme="ink-blue"] .search-shell input,
+:root[data-theme="ink-blue"] .palette-input input,
+:root[data-theme="ink-blue"] .import-search-bar input {
+  color: var(--line) !important;
+}
+
+:root[data-theme="ink-blue"] .search-shell input::placeholder,
+:root[data-theme="ink-blue"] .palette-input input::placeholder,
+:root[data-theme="ink-blue"] .import-search-bar input::placeholder {
+  color: rgba(24, 24, 26, 0.45) !important;
+}
+
+:root[data-theme="ink-blue"] .search-shell svg,
+:root[data-theme="ink-blue"] .palette-input svg,
+:root[data-theme="ink-blue"] .import-search-bar svg {
+  color: var(--line) !important;
 }
 
 :root[data-theme="ink-blue"] kbd {
@@ -4168,7 +5251,7 @@ kbd {
    ========================================== */
 
 /* 1. Atelier Zero 主题右键菜单 */
-:root[data-theme="atelier-zero"] .context-menu {
+:root[data-theme-style="atelier"] .context-menu {
   background: #fffdf8 !important;
   border: 1px solid var(--line) !important;
   border-radius: var(--radius-sm) !important;
@@ -4176,20 +5259,20 @@ kbd {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-:root[data-theme="atelier-zero"] .context-menu button {
+:root[data-theme-style="atelier"] .context-menu button {
   color: var(--text) !important;
   font-family: var(--font-body), Inter, sans-serif !important;
   border-radius: 4px !important;
 }
-:root[data-theme="atelier-zero"] .context-menu button:hover:not(:disabled) {
+:root[data-theme-style="atelier"] .context-menu button:hover:not(:disabled) {
   background: var(--surface-soft) !important;
   color: var(--accent) !important;
 }
-:root[data-theme="atelier-zero"] .context-menu button:disabled {
+:root[data-theme-style="atelier"] .context-menu button:disabled {
   color: var(--muted) !important;
   opacity: 0.45 !important;
 }
-:root[data-theme="atelier-zero"] .context-menu .context-separator {
+:root[data-theme-style="atelier"] .context-menu .context-separator {
   background: var(--line) !important;
   height: 1px !important;
   margin: 4px 0 !important;
@@ -4281,11 +5364,8 @@ kbd {
   margin: 4px 0 !important;
 }
 
-/* 5. 通用轻量/扁平主题自适应右键菜单 (sky-blue, mint-light, graphite-light, aurora-focus) */
-:root[data-theme="sky-blue"] .context-menu,
-:root[data-theme="mint-light"] .context-menu,
-:root[data-theme="graphite-light"] .context-menu,
-:root[data-theme="aurora-focus"] .context-menu {
+/* 5. 基础主题自适应右键菜单 (data-theme-style="atelier") */
+:root[data-theme-style="atelier"] .context-menu {
   background: var(--surface) !important;
   border: 1px solid var(--line-strong) !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
@@ -4293,39 +5373,379 @@ kbd {
   -webkit-backdrop-filter: blur(18px) !important;
 }
 
-:root[data-theme="sky-blue"] .context-menu button,
-:root[data-theme="mint-light"] .context-menu button,
-:root[data-theme="graphite-light"] .context-menu button,
-:root[data-theme="aurora-focus"] .context-menu button {
+:root[data-theme-style="atelier"] .context-menu button {
   color: var(--text) !important;
   font-family: var(--font-body), Inter, sans-serif !important;
 }
 
-:root[data-theme="sky-blue"] .context-menu button:hover:not(:disabled),
-:root[data-theme="mint-light"] .context-menu button:hover:not(:disabled),
-:root[data-theme="graphite-light"] .context-menu button:hover:not(:disabled),
-:root[data-theme="aurora-focus"] .context-menu button:hover:not(:disabled) {
+:root[data-theme-style="atelier"] .context-menu button:hover:not(:disabled) {
   background: var(--surface-soft) !important;
   color: var(--accent) !important;
 }
 
-:root[data-theme="sky-blue"] .context-menu button:disabled,
-:root[data-theme="mint-light"] .context-menu button:disabled,
-:root[data-theme="graphite-light"] .context-menu button:disabled,
-:root[data-theme="aurora-focus"] .context-menu button:disabled {
+:root[data-theme-style="atelier"] .context-menu button:disabled {
   color: var(--muted) !important;
   opacity: 0.45 !important;
 }
 
-:root[data-theme="sky-blue"] .context-menu .context-separator,
-:root[data-theme="mint-light"] .context-menu .context-separator,
-:root[data-theme="graphite-light"] .context-menu .context-separator,
-:root[data-theme="aurora-focus"] .context-menu .context-separator {
+:root[data-theme-style="atelier"] .context-menu .context-separator {
   background: var(--line) !important;
   height: 1px !important;
   margin: 4px 0 !important;
 }
 
+/* ==========================================================================
+   自定义全局热键与批量导入弹窗相关样式 (v0.4.2)
+   ========================================================================== */
+
+/* 1. 自定义热键输入框样式 */
+.hotkey-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.hotkey-input-container input {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line-strong, rgba(214, 168, 92, 0.24));
+  background: var(--field, rgba(255, 255, 255, 0.045));
+  color: var(--text, #f4ebd3);
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  outline: none;
+}
+
+.hotkey-input-container input.recording {
+  border-color: var(--teal, #27d7c6);
+  box-shadow: 0 0 12px rgba(39, 215, 198, 0.35);
+  background-color: rgba(39, 215, 198, 0.06);
+  animation: hotkey-pulse 1.6s infinite ease-in-out;
+  color: var(--teal-soft, #65f1e4);
+}
+
+@keyframes hotkey-pulse {
+  0% { border-color: rgba(39, 215, 198, 0.6); }
+  50% { border-color: rgba(39, 215, 198, 1); }
+  100% { border-color: rgba(39, 215, 198, 0.6); }
+}
+
+.hotkey-input-container .action-btn {
+  padding: 8px 14px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--line-strong, rgba(214, 168, 92, 0.24));
+  background: var(--surface-2, rgba(17, 24, 39, 0.88));
+  color: var(--text, #f4ebd3);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.hotkey-input-container .action-btn:hover:not(:disabled) {
+  background: var(--surface-3, rgba(22, 31, 48, 0.86));
+  border-color: var(--text, #f4ebd3);
+  transform: translateY(-1px);
+}
+
+.hotkey-input-container .confirm-btn {
+  background: var(--teal, #27d7c6) !important;
+  color: #050812 !important;
+  font-weight: 600;
+  border-color: var(--teal, #27d7c6) !important;
+}
+
+.hotkey-input-container .confirm-btn:hover:not(:disabled) {
+  background: var(--teal-soft, #65f1e4) !important;
+  border-color: var(--teal-soft, #65f1e4) !important;
+  box-shadow: 0 4px 12px rgba(39, 215, 198, 0.2);
+}
+
+.hotkey-input-container .cancel-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.hotkey-input-container .cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+
+/* 2. 批量导入过滤弹窗样式 */
+.import-preview-panel {
+  max-width: 620px !important;
+  width: 90% !important;
+  max-height: 80vh !important;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--field-strong, rgba(255, 255, 255, 0.072));
+  border: 1px solid var(--line-strong, rgba(214, 168, 92, 0.24));
+  border-radius: var(--radius-sm, 6px);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s ease;
+}
+
+.import-search-bar:focus-within {
+  border-color: var(--teal, #27d7c6);
+}
+
+.import-search-bar svg {
+  color: var(--muted, #8f9aaf);
+}
+
+.import-search-bar input {
+  background: transparent;
+  border: none;
+  color: var(--text, #f4ebd3);
+  outline: none;
+  width: 100%;
+  font-size: 13px;
+}
+
+.import-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted, #8f9aaf);
+  margin-bottom: 10px;
+  padding: 0 4px;
+}
+
+.import-toolbar strong {
+  color: var(--teal, #27d7c6);
+}
+
+.import-toolbar .toolbar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.import-toolbar .toolbar-btn {
+  background: transparent;
+  border: none;
+  color: var(--soft, #c9bfa8);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.import-toolbar .toolbar-btn:hover {
+  background: var(--surface-3, rgba(22, 31, 48, 0.86));
+  border-color: var(--line-strong, rgba(214, 168, 92, 0.24));
+  color: var(--text, #f4ebd3);
+}
+
+.import-preview-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--line-strong, rgba(214, 168, 92, 0.24));
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius, 8px);
+  max-height: 380px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.empty-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--muted, #8f9aaf);
+  font-size: 13px;
+}
+
+.import-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.import-preview-item:hover {
+  background: var(--surface-2, rgba(17, 24, 39, 0.88));
+  border-color: var(--line, rgba(255, 242, 198, 0.1));
+}
+
+.import-preview-item.is-checked {
+  background: rgba(39, 215, 198, 0.04);
+}
+
+.import-preview-item.is-checked:hover {
+  background: rgba(39, 215, 198, 0.08);
+}
+
+.import-preview-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--teal, #27d7c6);
+}
+
+.import-preview-item .item-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.import-preview-item .item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.import-preview-item .item-title {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text, #f4ebd3);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.import-preview-item .item-subtitle {
+  font-size: 11.5px;
+  color: var(--muted, #8f9aaf);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* 卸载程序警告样式 */
+.import-preview-item.is-uninstall {
+  background: rgba(255, 122, 144, 0.03);
+}
+
+.import-preview-item.is-uninstall:hover {
+  background: rgba(255, 122, 144, 0.08);
+  border-color: rgba(255, 122, 144, 0.2);
+}
+
+.import-preview-item.is-uninstall.is-checked {
+  background: rgba(255, 122, 144, 0.08);
+}
+
+.import-preview-item.is-uninstall.is-checked:hover {
+  background: rgba(255, 122, 144, 0.12);
+}
+
+.import-preview-item.is-uninstall input[type="checkbox"] {
+  accent-color: var(--danger, #ff7a90);
+}
+
+.import-preview-item.is-uninstall .uninstall-tag {
+  background: rgba(255, 122, 144, 0.12);
+  color: var(--danger, #ff7a90);
+  border: 1px solid rgba(255, 122, 144, 0.2);
+  font-size: 10px;
+  padding: 0.5px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  display: inline-block;
+}
 
 
 
+
+
+/* ==========================================================================
+   主题设置分组与容器样式 (v0.4.3)
+   ========================================================================== */
+.theme-group-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.theme-group-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 16px 0 8px 0;
+  opacity: 0.75;
+  border-bottom: 1px dashed var(--line-strong);
+  padding-bottom: 6px;
+  color: var(--text);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+:root[data-theme-style="atelier"] .theme-group-title {
+  font-family: var(--font-title), Georgia, serif !important;
+  text-transform: none;
+  font-size: 15px;
+  opacity: 0.9;
+}
+
+/* ==========================================================================
+   资源多标签/多分组选择样式 (v0.4.4)
+   ========================================================================== */
+.group-checkbox-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+  min-height: 42px;
+  margin-top: 4px;
+}
+
+.group-tag-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--soft);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.group-tag-checkbox:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.group-tag-checkbox.checked {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--line);
+  font-weight: 600;
+}

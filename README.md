@@ -99,6 +99,16 @@ src-tauri\target\release\bundle\nsis\OrbitStart_0.4.0_x64-setup.exe
 src-tauri\target\release\bundle\msi\OrbitStart_0.4.0_x64_en-US.msi
 ```
 
+### 安装说明
+
+普通用户只需要下载并运行安装包，不需要安装 Node.js、Rust 或 Tauri 开发环境。发布 Windows GUI 安装包时，优先使用：
+
+```text
+src-tauri\target\release\bundle\nsis\OrbitStart_0.4.0_x64-setup.exe
+```
+
+如果安装时提示 `Error opening file for writing ... orbitstart.exe`，说明安装器无法写入主程序文件，常见原因是旧版 OrbitStart 仍在托盘后台运行、目标目录没有写入权限，或文件被安全软件短暂占用。此时不要点击 `Ignore`，否则安装器会跳过主程序文件，只留下无法启动的快捷方式。请先从系统托盘退出 OrbitStart，或选择默认的当前用户安装目录后重新安装。
+
 ## 测试
 
 ```powershell

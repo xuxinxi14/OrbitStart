@@ -359,3 +359,117 @@ export async function openAuxWindow(panel: "settings" | "plugins" | "themes" | "
     window.location.hash = panel === "settings" ? "settings" : `settings-${panel}`;
   }
 }
+
+export async function getAutostartEnabled(): Promise<boolean> {
+  try {
+    return await invokeNative<boolean>("get_autostart_enabled");
+  } catch {
+    return false;
+  }
+}
+
+export async function setAutostartEnabled(enabled: boolean): Promise<void> {
+  try {
+    await invokeNative<void>("set_autostart_enabled", { enabled });
+  } catch {
+    // 浏览器预览静默失败
+  }
+}
+
+export async function updateGlobalHotkey(oldHotkey: string, newHotkey: string): Promise<void> {
+  try {
+    await invokeNative<void>("update_global_hotkey", { newHotkey });
+  } catch (e) {
+    console.warn("Failed to update global hotkey natively, fallback to browser state update", e);
+    const snapshot = readBrowserSnapshot();
+    const next = {
+      ...snapshot,
+      settings: { ...snapshot.settings, globalHotkey: newHotkey }
+    };
+    writeBrowserSnapshot(next);
+  }
+}
+
+export async function previewScanShortcuts(): Promise<OrbitItemInput[]> {
+  try {
+    return await invokeNative<OrbitItemInput[]>("preview_scan_shortcuts");
+  } catch {
+    return [
+      {
+        title: "示例本地程序 (Uninstall)",
+        subtitle: "C:\\Program Files\\Example\\uninstall.exe",
+        kind: "app",
+        group: "apps",
+        target: "C:\\Program Files\\Example\\uninstall.exe",
+        aliases: ["uninstall"],
+        tags: ["shortcut", "scan"],
+        icon: "AppWindow",
+        accent: "#5cc8ff",
+        favorite: false
+      },
+      {
+        title: "谷歌浏览器",
+        subtitle: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        kind: "app",
+        group: "apps",
+        target: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+        aliases: ["chrome"],
+        tags: ["shortcut", "scan"],
+        icon: "AppWindow",
+        accent: "#5cc8ff",
+        favorite: false
+      }
+    ];
+  }
+}
+
+export async function previewScanBrowserBookmarks(): Promise<OrbitItemInput[]> {
+  try {
+    return await invokeNative<OrbitItemInput[]>("preview_scan_browser_bookmarks");
+  } catch {
+    return [
+      {
+        title: "Baidu",
+        subtitle: "https://www.baidu.com",
+        kind: "website",
+        group: "web",
+        target: "https://www.baidu.com",
+        aliases: ["baidu"],
+        tags: ["bookmark", "browser"],
+        icon: "Globe",
+        accent: "#37d6bf",
+        favorite: false
+      },
+      {
+        title: "GitHub",
+        subtitle: "https://github.com",
+        kind: "website",
+        group: "web",
+        target: "https://github.com",
+        aliases: ["github"],
+        tags: ["bookmark", "browser"],
+        icon: "Globe",
+        accent: "#37d6bf",
+        favorite: false
+      }
+    ];
+  }
+}
+
+export async function importScannedItems(items: OrbitItemInput[]): Promise<OrbitItem[]> {
+  try {
+    return await invokeNative<OrbitItem[]>("import_scanned_items", { items });
+  } catch {
+    const current = readBrowserItems();
+    const created = items.map((input) => {
+      return {
+        ...input,
+        id: `${input.kind}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        launchCount: 0
+      };
+    });
+    const nextItems = [...created, ...current];
+    writeBrowserItems(nextItems);
+    return nextItems;
+  }
+}

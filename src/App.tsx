@@ -74,13 +74,19 @@ import {
   revealTarget,
   scanBrowserBookmarks,
   scanShortcuts,
+  updateGlobalHotkey,
+  previewScanShortcuts,
+  previewScanBrowserBookmarks,
+  importScannedItems,
   setActiveTheme,
   setCloseBehavior,
   setDensity,
   setPluginEnabled,
   setSafeMode,
   updateItem,
-  launchItem
+  launchItem,
+  getAutostartEnabled,
+  setAutostartEnabled
 } from "./lib/native";
 import { createOrbitPluginHost } from "./plugin/api";
 import { localGalaxyAssets } from "./theme/localGalaxyAssets";
@@ -96,6 +102,8 @@ import type {
   SearchResult,
   ThemeManifest
 } from "./types";
+
+const appIconSrc = new URL("../design/app-icons/orbitstart-first-icon-ui.png", import.meta.url).href;
 
 type ViewId = "dashboard" | "settings" | "logs";
 type SettingsSection = "general" | "plugins" | "themes" | "dev" | "data" | "about";
@@ -214,6 +222,36 @@ function listToText(value: string[]) {
   return value.join(", ");
 }
 
+function uniqueList(values: string[]) {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function splitGroupIds(value: string) {
+  return uniqueList(value.split(","));
+}
+
+function joinGroupIds(values: string[]) {
+  return uniqueList(values).join(",");
+}
+
+function mergeGroupValues(...values: string[]) {
+  return joinGroupIds(values.flatMap(splitGroupIds));
+}
+
+function normalizeGroupValue(value: string, fallback = "") {
+  const normalized = joinGroupIds(splitGroupIds(value));
+  return normalized || fallback;
+}
+
+function itemHasGroup(item: Pick<OrbitItem, "group">, groupId: string) {
+  return splitGroupIds(item.group).includes(groupId);
+}
+
+function groupLabelsForItem(item: Pick<OrbitItem, "group">, groups: OrbitGroup[]) {
+  const titleById = new Map(groups.map((group) => [group.id, group.title]));
+  return splitGroupIds(item.group).map((id) => ({ id, title: titleById.get(id) ?? id }));
+}
+
 function isTauriRuntime() {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 }
@@ -221,7 +259,7 @@ function isTauriRuntime() {
 function matchesItem(item: OrbitItem, query: string) {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return true;
-  return [item.title, item.subtitle, item.kind, item.group, item.target, ...item.aliases, ...item.tags]
+  return [item.title, item.subtitle, item.kind, ...splitGroupIds(item.group), item.target, ...item.aliases, ...item.tags]
     .join(" ")
     .toLowerCase()
     .includes(normalized);
@@ -326,6 +364,17 @@ export default function App() {
   const [selectedPlugin, setSelectedPlugin] = useState<OrbitPluginManifest | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
+  const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
+  const hotkeyInputRef = useRef<HTMLInputElement>(null);
+
+  const [importPreview, setImportPreview] = useState<{
+    kind: "shortcuts" | "bookmarks";
+    items: OrbitItemInput[];
+    selectedIndices: Set<number>;
+    searchQuery: string;
+  } | null>(null);
   const pluginHost = useMemo(() => createOrbitPluginHost(plugins), [plugins]);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -333,6 +382,12 @@ export default function App() {
   const contextEditTargetRef = useRef<HTMLElement | null>(null);
   const lastPointerRef = useRef({ x: 24, y: 24 });
   const dropInProgressRef = useRef(false);
+
+  useEffect(() => {
+    if (isTauriRuntime()) {
+      void getAutostartEnabled().then(setAutostartEnabled);
+    }
+  }, []);
 
   function applySnapshot(snapshot: Awaited<ReturnType<typeof loadSnapshot>>) {
     setItems(snapshot.items);
@@ -520,6 +575,11 @@ export default function App() {
     if (!activeTheme) return;
     const root = document.documentElement;
     root.dataset.theme = activeTheme.id;
+    if (activeTheme.id.startsWith("atelier-")) {
+      root.dataset.themeStyle = "atelier";
+    } else {
+      delete root.dataset.themeStyle;
+    }
     root.removeAttribute("style");
     Object.entries(activeTheme.tokens).forEach(([key, value]) => root.style.setProperty(key, value));
   }, [activeTheme]);
@@ -542,7 +602,10 @@ export default function App() {
   const filteredItems = useMemo(() => {
     return items
       .filter(itemKindAllowed)
-      .filter((item) => activeGroup === "all" || item.group === activeGroup)
+      .filter((item) => {
+        if (activeGroup === "all") return true;
+        return itemHasGroup(item, activeGroup);
+      })
       .filter((item) => matchesItem(item, query));
   }, [activeGroup, items, plugins, query]);
 
@@ -586,10 +649,7 @@ export default function App() {
   }
 
   function renderBrandIcon(size = 24) {
-    if (isLocalGalaxyTheme) {
-      return <img src={localGalaxyAssets.icons.logo.src} alt="" />;
-    }
-    return <Sparkles size={size} strokeWidth={1.8} />;
+    return <img src={appIconSrc} alt="" width={size} height={size} />;
   }
 
   function inputWithKind(input: OrbitItemInput, kind: ItemKind): OrbitItemInput {
@@ -597,7 +657,7 @@ export default function App() {
     return {
       ...input,
       kind,
-      group: option.group,
+      group: normalizeGroupValue(mergeGroupValues(option.group, input.group), option.group),
       icon: option.icon,
       accent: option.accent
     };
@@ -618,7 +678,15 @@ export default function App() {
 
   async function saveEditor() {
     if (!editor) return;
-    if (!editor.input.title.trim() || !editor.input.target.trim()) {
+    const option = baseKindOptions.find((candidate) => candidate.value === editor.input.kind) ?? baseKindOptions[0];
+    const normalizedInput = {
+      ...editor.input,
+      group: normalizeGroupValue(editor.input.group, option.group),
+      aliases: uniqueList(editor.input.aliases),
+      tags: uniqueList(editor.input.tags)
+    };
+
+    if (!normalizedInput.title.trim() || !normalizedInput.target.trim()) {
       setToast("标题和目标路径/网址不能为空");
       return;
     }
@@ -626,14 +694,14 @@ export default function App() {
     setBusy(true);
     try {
       if (editor.mode === "create") {
-        await createItem(editor.input);
-        setToast(`已添加：${editor.input.title}`);
+        await createItem(normalizedInput);
+        setToast(`已添加：${normalizedInput.title}`);
       } else {
         await updateItem({
           ...editor.item,
-          ...editor.input
+          ...normalizedInput
         });
-        setToast(`已更新：${editor.input.title}`);
+        setToast(`已更新：${normalizedInput.title}`);
       }
       setEditor(null);
       await reload();
@@ -667,7 +735,7 @@ export default function App() {
     return {
       ...current,
       kind: picked.kind,
-      group: picked.group,
+      group: normalizeGroupValue(mergeGroupValues(current.group, picked.group), picked.group),
       target: picked.target,
       title: current.title.trim() ? current.title : picked.title,
       subtitle: current.subtitle.trim() ? current.subtitle : picked.subtitle,
@@ -816,14 +884,14 @@ export default function App() {
     try {
       const selected = items.filter((item) => selectedIds.includes(item.id));
       for (const item of selected) {
-        await updateItem({ ...item, group: groupId });
+        await updateItem({ ...item, group: normalizeGroupValue(mergeGroupValues(item.group, groupId), groupId) });
       }
       setBatchGroup(groupId);
       exitBatchMode();
       setDialog(null);
       await reload();
       const group = groups.find((candidate) => candidate.id === groupId);
-      setToast(`已移动到：${group?.title ?? groupId}`);
+      setToast(`已添加标签：${group?.title ?? groupId}`);
     } catch (error) {
       setToast(`批量移动失败：${String(error)}`);
     } finally {
@@ -831,14 +899,118 @@ export default function App() {
     }
   }
 
-  async function runNativeItemScan(kind: "shortcuts" | "bookmarks") {
+  const handleHotkeyKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isRecordingHotkey) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    // 如果按下 Escape 键，退出录制并取消
+    if (event.key === "Escape") {
+      setIsRecordingHotkey(false);
+      setRecordedKeys([]);
+      return;
+    }
+
+    // 如果按下 Backspace，清空录制
+    if (event.key === "Backspace") {
+      setRecordedKeys([]);
+      return;
+    }
+
+    const keys: string[] = [];
+
+    // 检测修饰键
+    if (event.ctrlKey) keys.push("Ctrl");
+    if (event.altKey) keys.push("Alt");
+    if (event.shiftKey) keys.push("Shift");
+    if (event.metaKey) keys.push("Win");
+    
+    // 排除修饰键本身的名称
+    const key = event.key;
+    const isModifierOnly = ["Control", "Alt", "Shift", "Meta", "OS"].includes(key);
+
+    if (!isModifierOnly) {
+      let keyName = key;
+      if (keyName === " ") keyName = "Space";
+      
+      // 规范化名称
+      if (keyName.length === 1) {
+        keyName = keyName.toUpperCase();
+      } else {
+        // 首字母大写
+        keyName = keyName.charAt(0).toUpperCase() + keyName.slice(1);
+      }
+      keys.push(keyName);
+    }
+
+    // 限制最多四个键
+    const finalKeys = keys.slice(0, 4);
+    setRecordedKeys(finalKeys);
+  };
+
+  async function saveHotkey() {
+    const hasMainKey = recordedKeys.length > 0 && !["Ctrl", "Alt", "Shift", "Win"].includes(recordedKeys[recordedKeys.length - 1]);
+    if (!hasMainKey) {
+      setToast("快捷键必须包含一个主键（例如字母、数字或空格）");
+      return;
+    }
+    const newHotkey = recordedKeys.join("+");
+    const oldHotkey = settings?.globalHotkey ?? "Ctrl+Alt+Space";
+    if (newHotkey === oldHotkey) {
+      setIsRecordingHotkey(false);
+      return;
+    }
+    
     setBusy(true);
     try {
-      const nextItems = kind === "shortcuts" ? await scanShortcuts() : await scanBrowserBookmarks();
-      setItems(nextItems);
-      await reload();
-      const label = kind === "shortcuts" ? "快捷方式" : "浏览器书签";
-      setToast(`${label}扫描完成：当前 ${nextItems.length} 个资源`);
+      await updateGlobalHotkey(oldHotkey, newHotkey);
+      if (settings) {
+        setSettings({ ...settings, globalHotkey: newHotkey });
+      }
+      setToast(`全局热键已更新为：${newHotkey}`);
+      setIsRecordingHotkey(false);
+    } catch (error) {
+      setToast(`注册热键失败，可能被占用：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runNativeItemScan(kind: "shortcuts" | "bookmarks") {
+    setBusy(true);
+    setToast(kind === "shortcuts" ? "正在扫描本地程序..." : "正在读取浏览器书签...");
+    try {
+      const scanned = kind === "shortcuts" 
+        ? await previewScanShortcuts() 
+        : await previewScanBrowserBookmarks();
+      
+      if (scanned.length === 0) {
+        setToast("未扫描到任何可用资源");
+        return;
+      }
+
+      // 默认选中所有项，但自动过滤包含 "uninstall" 或 "卸载" 字样的项
+      const selectedIndices = new Set<number>();
+      scanned.forEach((item, index) => {
+        const titleLower = item.title.toLowerCase();
+        const subtitleLower = item.subtitle.toLowerCase();
+        const targetLower = item.target.toLowerCase();
+        const isUninstall = titleLower.includes("uninstall") || titleLower.includes("卸载") 
+          || subtitleLower.includes("uninstall") || subtitleLower.includes("卸载")
+          || targetLower.includes("uninstall") || targetLower.includes("卸载");
+        
+        if (!isUninstall) {
+          selectedIndices.add(index);
+        }
+      });
+
+      setImportPreview({
+        kind,
+        items: scanned,
+        selectedIndices,
+        searchQuery: ""
+      });
+      setToast(kind === "shortcuts" ? "本地程序扫描已就绪，请选择导入" : "浏览器书签扫描已就绪，请选择导入");
     } catch (error) {
       setToast(`扫描失败：${String(error)}`);
     } finally {
@@ -936,14 +1108,7 @@ export default function App() {
   }
 
   async function openPanelWindow(panel: AuxPanel) {
-    if (isTauriRuntime()) {
-      try {
-        await openAuxWindow(panel);
-        return;
-      } catch (error) {
-        setToast(`打开窗口失败：${String(error)}`);
-      }
-    }
+    // 设置页面直接在主窗口中央本地渲染，不再打开独立的 Tauri 子窗口以保证跟随和关闭生命周期一致
     setLocalAuxPanel(panel);
     setSettingsSection(sectionFromPanel(panel));
   }
@@ -956,6 +1121,20 @@ export default function App() {
       setToast(snapshot.settings.safeMode ? "安全模式已启用：第三方插件暂时停用" : "安全模式已关闭");
     } catch (error) {
       setToast(`安全模式更新失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleAutostart() {
+    const next = !autostartEnabled;
+    setBusy(true);
+    try {
+      await setAutostartEnabled(next);
+      setAutostartEnabled(next);
+      setToast(next ? "开机自启动已启用" : "开机自启动已禁用");
+    } catch (error) {
+      setToast(`设置自启动失败：${String(error)}`);
     } finally {
       setBusy(false);
     }
@@ -1229,7 +1408,7 @@ export default function App() {
               <strong>已选 {selectedIds.length} 个</strong>
               <button type="button" onClick={() => setSelectedIds(filteredItems.map((item) => item.id))}>全选当前</button>
               <button type="button" onClick={() => setSelectedIds([])}>清空</button>
-              <button type="button" onClick={batchMoveSelected} disabled={busy || selectedIds.length === 0}>移动</button>
+              <button type="button" onClick={batchMoveSelected} disabled={busy || selectedIds.length === 0}>加标签</button>
               <button type="button" className="danger-action" onClick={batchDeleteSelected} disabled={busy || selectedIds.length === 0}>删除</button>
             </div>
           )}
@@ -1252,6 +1431,11 @@ export default function App() {
                   <span className="resource-copy">
                     <strong>{item.title}</strong>
                     <small>{item.subtitle || item.target}</small>
+                    <span className="resource-group-tags" aria-label="资源标签">
+                      {groupLabelsForItem(item, groups).map((group) => (
+                        <em key={group.id}>{group.title}</em>
+                      ))}
+                    </span>
                   </span>
                   <span className="resource-meta-column">
                     <em>{item.launchCount} 次启动</em>
@@ -1378,46 +1562,79 @@ export default function App() {
     </section>
   );
 
-  const renderThemes = () => (
-    <section className="settings-page-grid theme-settings">
-      <div className="setting-card wide-card">
-        <div className="section-head">
-          <div>
-            <p className="eyebrow">Theme</p>
-            <h2>{activeTheme?.name ?? "未选择主题"}</h2>
+  const renderThemes = () => {
+    const isPremiumTheme = (themeId: string) => {
+      return ["local-galaxy", "orbit-dark", "ink-blue", "creative-mode"].includes(themeId);
+    };
+
+    const isBasicLight = (themeId: string) => {
+      return ["atelier-zero", "atelier-charcoal", "atelier-mint", "atelier-sky", "atelier-pink", "atelier-grey", "atelier-lavender"].includes(themeId);
+    };
+
+    const isBasicDark = (themeId: string) => {
+      return ["atelier-rust", "atelier-coal", "atelier-abyss", "atelier-amber"].includes(themeId);
+    };
+
+    const premiumThemes = themes.filter((t) => isPremiumTheme(t.id));
+    const basicLightThemes = themes.filter((t) => isBasicLight(t.id));
+    const basicDarkThemes = themes.filter((t) => isBasicDark(t.id));
+    const otherThemes = themes.filter((t) => !isPremiumTheme(t.id) && !isBasicLight(t.id) && !isBasicDark(t.id));
+    const allPremium = [...premiumThemes, ...otherThemes];
+
+    const renderThemeCard = (theme: ThemeManifest) => (
+      <button key={theme.id} className={`theme-card ${theme.id === settings?.activeThemeId ? "selected" : ""}`} onClick={() => changeTheme(theme.id)}>
+        <span className="theme-swatches">
+          <i style={{ background: theme.tokens["--bg"] }} />
+          <i style={{ background: theme.tokens["--accent"] }} />
+          <i style={{ background: theme.tokens["--accent-2"] }} />
+          <i style={{ background: theme.tokens["--accent-3"] }} />
+        </span>
+        <strong>{theme.name}</strong>
+        <small>{theme.description}</small>
+        <em>{theme.builtin ? "官方主题" : "本地主题包"}</em>
+      </button>
+    );
+
+    return (
+      <section className="settings-page-grid theme-settings">
+        <div className="setting-card wide-card">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Theme</p>
+              <h2>{activeTheme?.name ?? "未选择主题"}</h2>
+            </div>
+            <button className="secondary-action" onClick={() => changeDensity(density === "comfortable" ? "compact" : "comfortable")} disabled={busy}>
+              <Grid3X3 size={17} />
+              {density === "comfortable" ? "紧凑模式" : "舒适模式"}
+            </button>
           </div>
-          <button className="secondary-action" onClick={() => changeDensity(density === "comfortable" ? "compact" : "comfortable")} disabled={busy}>
-            <Grid3X3 size={17} />
-            {density === "comfortable" ? "紧凑模式" : "舒适模式"}
+          <div className="theme-group-container">
+            <h3 className="theme-group-title">高级主题</h3>
+            <div className="theme-grid">
+              {allPremium.map(renderThemeCard)}
+            </div>
+            <h3 className="theme-group-title">基础主题 - 亮色</h3>
+            <div className="theme-grid">
+              {basicLightThemes.map(renderThemeCard)}
+            </div>
+            <h3 className="theme-group-title">基础主题 - 暗色</h3>
+            <div className="theme-grid">
+              {basicDarkThemes.map(renderThemeCard)}
+            </div>
+          </div>
+        </div>
+        <div className="setting-card info-card">
+          <p className="eyebrow">Directory</p>
+          <h2>主题包目录</h2>
+          <p>{settings?.dataDir ? `${settings.dataDir}\\themes` : "加载中"}</p>
+          <button className="wide-command" onClick={openDataDir}>
+            <FolderOpen size={17} />
+            <span>打开数据目录</span>
           </button>
         </div>
-        <div className="theme-grid">
-          {themes.map((theme) => (
-            <button key={theme.id} className={`theme-card ${theme.id === settings?.activeThemeId ? "selected" : ""}`} onClick={() => changeTheme(theme.id)}>
-              <span className="theme-swatches">
-                <i style={{ background: theme.tokens["--bg"] }} />
-                <i style={{ background: theme.tokens["--accent"] }} />
-                <i style={{ background: theme.tokens["--accent-2"] }} />
-                <i style={{ background: theme.tokens["--accent-3"] }} />
-              </span>
-              <strong>{theme.name}</strong>
-              <small>{theme.description}</small>
-              <em>{theme.builtin ? "官方主题" : "本地主题包"}</em>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="setting-card info-card">
-        <p className="eyebrow">Directory</p>
-        <h2>主题包目录</h2>
-        <p>{settings?.dataDir ? `${settings.dataDir}\\themes` : "加载中"}</p>
-        <button className="wide-command" onClick={openDataDir}>
-          <FolderOpen size={17} />
-          <span>打开数据目录</span>
-        </button>
-      </div>
-    </section>
-  );
+      </section>
+    );
+  };
 
   const renderDev = () => (
     <section className="settings-page-grid dev-settings">
@@ -1495,7 +1712,31 @@ export default function App() {
           </label>
           <label>
             全局热键
-            <input value={settings?.globalHotkey ?? "Ctrl+Alt+Space"} readOnly />
+            <div className="hotkey-input-container">
+              <input
+                ref={hotkeyInputRef}
+                value={isRecordingHotkey ? (recordedKeys.join("+") || "请按下快捷键...") : (settings?.globalHotkey ?? "Ctrl+Alt+Space")}
+                readOnly
+                onKeyDown={handleHotkeyKeyDown}
+                className={isRecordingHotkey ? "recording" : ""}
+                placeholder="请按下快捷键..."
+                style={{ cursor: isRecordingHotkey ? "pointer" : "default" }}
+              />
+              {isRecordingHotkey ? (
+                <>
+                  <button type="button" className="action-btn confirm-btn" onClick={saveHotkey} disabled={busy}>
+                    确定
+                  </button>
+                  <button type="button" className="action-btn cancel-btn" onClick={() => { setIsRecordingHotkey(false); setRecordedKeys([]); }} disabled={busy}>
+                    取消
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="action-btn" onClick={() => { setIsRecordingHotkey(true); setRecordedKeys([]); setTimeout(() => hotkeyInputRef.current?.focus(), 50); }}>
+                  自定义
+                </button>
+              )}
+            </div>
           </label>
           <label>
             关闭按钮
@@ -1508,6 +1749,12 @@ export default function App() {
             <input type="checkbox" checked={Boolean(settings?.safeMode)} onChange={toggleSafeMode} />
             安全模式
           </label>
+          {isTauriRuntime() && (
+            <label className="setting-inline">
+              <input type="checkbox" checked={autostartEnabled} onChange={toggleAutostart} />
+              开机自启动
+            </label>
+          )}
         </div>
       </div>
       <div className="setting-card">
@@ -1736,16 +1983,16 @@ export default function App() {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">Batch move</p>
-                <h2>移动到分组</h2>
+                <h2>添加到标签</h2>
               </div>
               <button type="button" className="icon-action" onClick={() => setDialog(null)}>
                 <X size={18} />
               </button>
             </div>
             <div className="dialog-body">
-              <p>已选择 {selectedIds.length} 个资源。选择目标分组后再移动。</p>
+              <p>已选择 {selectedIds.length} 个资源。选择标签后会追加到资源现有标签中。</p>
               <label>
-                移动目的地
+                目标标签
                 <select
                   value={dialog.groupId}
                   onChange={(event) =>
@@ -1768,7 +2015,7 @@ export default function App() {
                 onClick={() => void confirmBatchMoveSelected(dialog.groupId)}
                 disabled={busy || selectedIds.length === 0 || moveGroups.length === 0}
               >
-                移动
+                添加标签
               </button>
             </div>
           </div>
@@ -1941,6 +2188,184 @@ export default function App() {
     );
   };
 
+  const renderImportPreviewDialog = () => {
+    if (!importPreview) return null;
+
+    const { kind, items, selectedIndices, searchQuery } = importPreview;
+    
+    // 根据搜索框内容过滤出显示的项目列表
+    const filteredItemsWithOriginalIndex = items
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => {
+        const q = searchQuery.toLowerCase();
+        return (
+          item.title.toLowerCase().includes(q) ||
+          item.subtitle.toLowerCase().includes(q) ||
+          item.target.toLowerCase().includes(q)
+        );
+      });
+
+    // 检查某项是否为卸载程序
+    const checkIsUninstall = (item: OrbitItemInput) => {
+      const titleLower = item.title.toLowerCase();
+      const subtitleLower = item.subtitle.toLowerCase();
+      const targetLower = item.target.toLowerCase();
+      return (
+        titleLower.includes("uninstall") ||
+        titleLower.includes("卸载") ||
+        subtitleLower.includes("uninstall") ||
+        subtitleLower.includes("卸载") ||
+        targetLower.includes("uninstall") ||
+        targetLower.includes("卸载")
+      );
+    };
+
+    // 切换单个勾选状态
+    const handleToggleItem = (index: number) => {
+      const nextSelected = new Set(selectedIndices);
+      if (nextSelected.has(index)) {
+        nextSelected.delete(index);
+      } else {
+        nextSelected.add(index);
+      }
+      setImportPreview({ ...importPreview, selectedIndices: nextSelected });
+    };
+
+    // 全选当前过滤出的项目
+    const handleSelectAllFiltered = () => {
+      const nextSelected = new Set(selectedIndices);
+      filteredItemsWithOriginalIndex.forEach(({ index }) => {
+        nextSelected.add(index);
+      });
+      setImportPreview({ ...importPreview, selectedIndices: nextSelected });
+    };
+
+    // 反选当前过滤出的项目（只针对当前显示的过滤列表进行切换）
+    const handleInvertFiltered = () => {
+      const nextSelected = new Set(selectedIndices);
+      filteredItemsWithOriginalIndex.forEach(({ index }) => {
+        if (nextSelected.has(index)) {
+          nextSelected.delete(index);
+        } else {
+          nextSelected.add(index);
+        }
+      });
+      setImportPreview({ ...importPreview, selectedIndices: nextSelected });
+    };
+
+    // 执行导入
+    const handleConfirmImport = async () => {
+      const selectedItems = Array.from(selectedIndices).map((idx) => items[idx]);
+      if (selectedItems.length === 0) {
+        setToast("未选中任何导入项");
+        return;
+      }
+      setBusy(true);
+      setToast("正在批量导入项目，请稍候...");
+      try {
+        const nextItems = await importScannedItems(selectedItems);
+        setItems(nextItems);
+        await reload();
+        setToast(`成功导入 ${selectedItems.length} 个资源`);
+        setImportPreview(null);
+      } catch (error) {
+        setToast(`导入失败：${String(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    };
+
+    const label = kind === "shortcuts" ? "本地程序" : "浏览器书签";
+
+    return (
+      <section className="palette-backdrop" role="dialog" aria-modal="true">
+        <div className="modal-panel import-preview-panel">
+          <div className="modal-head">
+            <div>
+              <p className="eyebrow">Batch Import</p>
+              <h2>批量导入过滤：{label}</h2>
+            </div>
+            <button className="icon-action" onClick={() => setImportPreview(null)}>
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="import-search-bar">
+            <Search size={16} />
+            <input
+              type="text"
+              placeholder="搜索扫描出的项目名称或路径..."
+              value={searchQuery}
+              onChange={(e) => setImportPreview({ ...importPreview, searchQuery: e.target.value })}
+            />
+          </div>
+
+          <div className="import-toolbar">
+            <span>
+              已选中 <strong>{selectedIndices.size}</strong> / {items.length} 项
+            </span>
+            <div className="toolbar-actions">
+              <button type="button" className="toolbar-btn" onClick={handleSelectAllFiltered}>
+                全选过滤项
+              </button>
+              <button type="button" className="toolbar-btn" onClick={handleInvertFiltered}>
+                反选过滤项
+              </button>
+              <button type="button" className="toolbar-btn" onClick={() => setImportPreview({ ...importPreview, selectedIndices: new Set() })}>
+                清空选择
+              </button>
+            </div>
+          </div>
+
+          <div className="import-preview-list">
+            {filteredItemsWithOriginalIndex.length === 0 ? (
+              <div className="empty-preview">没有找到匹配的项目</div>
+            ) : (
+              filteredItemsWithOriginalIndex.map(({ item, index }) => {
+                const isUninstall = checkIsUninstall(item);
+                const isChecked = selectedIndices.has(index);
+                return (
+                  <div
+                    key={index}
+                    className={`import-preview-item ${isUninstall ? "is-uninstall" : ""} ${isChecked ? "is-checked" : ""}`}
+                    onClick={() => handleToggleItem(index)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {}}
+                    />
+                    <div className="item-icon-wrapper" style={{ color: item.accent }}>
+                      <Icon name={item.icon} size={18} />
+                    </div>
+                    <div className="item-info">
+                      <div className="item-title">
+                        {item.title}
+                        {isUninstall && <span className="uninstall-tag">卸载程序 / 无效项</span>}
+                      </div>
+                      <div className="item-subtitle" title={item.subtitle}>
+                        {item.subtitle}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <button className="secondary-action" onClick={() => setImportPreview(null)} disabled={busy}>
+              取消
+            </button>
+            <button className="primary-action" onClick={handleConfirmImport} disabled={busy || selectedIndices.size === 0}>
+              确认导入 ({selectedIndices.size})
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   if (isAuxWindow) {
     const auxTitle = auxPanel === "plugins" ? "插件管理" : auxPanel === "themes" ? "主题工作室" : auxPanel === "about" ? "关于 OrbitStart" : "设置";
     return (
@@ -1974,6 +2399,7 @@ export default function App() {
           {dialog && renderAppDialog()}
           {selectedPlugin && renderPluginDetail()}
           {backupOpen && renderBackupDialog()}
+          {importPreview && renderImportPreviewDialog()}
         </main>
         {contextMenu && renderContextMenu()}
       </>
@@ -2204,15 +2630,33 @@ export default function App() {
                   placeholder="显示在标题下方"
                 />
               </label>
-              <label>
-                分组
-                <select value={editor.input.group} onChange={(event) => setEditor({ ...editor, input: { ...editor.input, group: event.target.value } })}>
-                  {visibleGroups.filter((group) => group.id !== "all").map((group) => (
-                    <option key={group.id} value={group.id}>
-                      {group.title}
-                    </option>
-                  ))}
-                </select>
+              <label className="wide-field">
+                所属分组 / 标签 (支持多选)
+                <div className="group-checkbox-grid">
+                  {visibleGroups.filter((group) => group.id !== "all").map((group) => {
+                    const selectedGroups = splitGroupIds(editor.input.group);
+                    const isChecked = selectedGroups.includes(group.id);
+                    return (
+                      <button
+                        key={group.id}
+                        type="button"
+                        className={`group-tag-checkbox ${isChecked ? "checked" : ""}`}
+                        onClick={() => {
+                          const next = isChecked
+                            ? selectedGroups.filter((g) => g !== group.id)
+                            : [...selectedGroups, group.id];
+                          setEditor({
+                            ...editor,
+                            input: { ...editor.input, group: joinGroupIds(next) }
+                          });
+                        }}
+                      >
+                        <Icon name={group.icon} size={14} />
+                        <span>{group.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </label>
               <label>
                 颜色
@@ -2389,6 +2833,7 @@ export default function App() {
           </div>
         </section>
       )}
+      {importPreview && renderImportPreviewDialog()}
       </main>
       {contextMenu && renderContextMenu()}
     </>
