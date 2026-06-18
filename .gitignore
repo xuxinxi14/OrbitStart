@@ -29,6 +29,13 @@ playwright-report/
 test-results/
 .playwright-cli/
 
+# HTML video presentation workspaces and exports
+orbitstart-video/
+*.webm
+*.mp4
+*.mov
+*.m4v
+
 # Logs and crash dumps
 *.log
 *.stackdump
@@ -41,9 +48,32 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+*.lnk
 .idea/
 .vscode/
+*.swp
+*.swo
+*~
+*.orig
+*.rej
 
-# Local agent workspaces
+# TypeScript / lint / build caches
+*.tsbuildinfo
+.eslintcache
+.cache/
+.turbo/
+.parcel-cache/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Package tarballs
+*.tgz
+
+# Local agent workspaces (AI assistants)
 .agents/
 .claude/
+.workbuddy/
+.cursor/
+.aider*

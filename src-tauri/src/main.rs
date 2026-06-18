@@ -525,7 +525,7 @@ fn plugin(
     PluginManifest {
         id: id.to_string(),
         name: name.to_string(),
-        version: "0.4.0".to_string(),
+        version: "0.4.5".to_string(),
         description: description.to_string(),
         enabled: true,
         builtin: true,

@@ -1,258 +1,211 @@
 # OrbitStart Hyperframes 视频 Outline
 
-## 当前状态
+## 修订目标
 
-本轮已先完成图标统一，再重新截图。
+本轮根据反馈重组视频：
 
-- 左上角标题栏图标与侧边栏品牌图标已统一为新图标：`E:\OrbitStart\design\app-icons\orbitstart-first-icon-ui.png`
-- Tauri 打包图标已同步为：`E:\OrbitStart\src-tauri\icons\icon.ico`
-- 开发预览 favicon 已同步为：`E:\OrbitStart\public\favicon.png`
-- 主题截图已重新生成，旧 Local Galaxy 图标不再出现在左上角品牌位。
+- 不再使用“我有多少程序”“当前机器有多少资源”等个人化或临时数据。
+- 叙事从“作者自述”改为“面向普通观众的产品演示”。
+- 所有产品截图必须完整呈现，使用 `object-fit: contain`，不为了构图裁掉边缘。
+- 支持鼠标单击、方向键、空格播放、鼠标滚轮前进/后退。
+- 片尾版本号改为 `OrbitStart 0.4.5`。
 
-本文件按你修改后的 `script.md` 更新，重点新增“多主题”段落。
+## 参考经验
 
-## 对齐点
+重新组织时采用的原则：
 
-本轮仍先完成脚本和节奏设计，暂不进入完整 HTML 实现。确认后再写：
-
-`E:\OrbitStart\orbitstart-video\presentation\index.html`
-
-需要确认的 5 件事：
-
-1. 口播稿是否采用 `script.md` 当前版本。
-2. 分镜节奏是否采用本 outline。
-3. 模板是否确认使用 Open Design 的 `video-hyperframes`。
-4. 素材是否使用当前重新截图后的页面图、15 个主题图和生成转场图。
-5. 开发模式是否按“可点击 HTML 预览 + 后续可录屏/转 Remotion”的方式推进。
+- 开场先讲观众能感知的问题，再给产品定位。
+- 产品演示要展示真实使用场景，而不是堆叠功能名。
+- 每个镜头聚焦一个动作：导入、整理、搜索、启动工作流、控制、反馈。
+- 保留截图完整性。截图是证据，不是背景装饰。
 
 ## 模板基线
 
-主模板：
+实现文件：
 
-`E:\OrbitStart\orbitstart-video\template\video-hyperframes-example.html`
+`E:\OrbitStart\orbitstart-video\presentation\index.html`
 
 页面规格：
 
 - 16:9
 - 1920x1080 设计基准
-- 每个叙事点对应一个 `<section class="frame">`
-- 每帧保留 `data-duration`
-- 文件底部保留 `HYPERFRAMES_META`
-- 支持自动播放、方向键、点击切换和暂停
-
-## 主题素材确认
-
-当前已装载并截图 15 套主题：
-
-- 高级主题：Local Galaxy、Zentou Wireframe、People's Platform、Creative Mode
-- 基础主题 - 亮色：Atelier Zero、Atelier Charcoal、Atelier Mint、Atelier Sky、Atelier Pink、Atelier Grey、Atelier Lavender
-- 基础主题 - 暗色：Atelier Rust、Atelier Coal、Atelier Abyss、Atelier Amber
-
-总览图：
-
-`E:\OrbitStart\orbitstart-video\assets\screenshots\themes\all-themes-contact-sheet.png`
+- 12 帧
+- 每帧一个叙事点
+- 图片默认完整显示
+- 支持 `?frame=05` 指定帧
+- 支持 `?auto=1` 自动播放
 
 ## 节奏结构
 
 ### Frame 01：问题
 
-信息密度：低
+核心句：`工作入口，不该到处散落`
 
-核心句：`入口不该散落`
+信息密度：低
 
 素材：`assets/generated/orbitstart-orbit-transition.png`
 
-作用：对应脚本里“将近 100 个程序”的开场，把注意力消耗讲清楚，不急着展示功能。
+作用：建立“多入口切换造成启动成本”的普遍问题，不再使用个人电脑上的具体数量。
 
-### Frame 02：产品身份
+### Frame 02：产品定位
+
+核心句：`本地优先的启动工作台`
 
 信息密度：中
-
-核心句：`收纳是一项艺术`
 
 素材：`assets/screenshots/dashboard.png`
 
-作用：用新版左上角图标和资源中心截图建立产品身份，突出“本地优先的 Windows 启动工作台”和“收纳盒”隐喻。
+作用：说明 OrbitStart 是本地优先的 Windows 启动工作台。截图必须完整显示。
 
-### Frame 03：资源中心
+### Frame 03：本地导入
 
-信息密度：中
-
-核心句：`应用、文件、网址、脚本，统一索引`
-
-素材：`assets/screenshots/dashboard.png`
-
-作用：解释每个入口都有名称、分组、标签、别名、启动次数和最近使用记录。
-
-### Frame 04：搜索与命令
+核心句：`先接住已有入口`
 
 信息密度：中
 
-核心句：`直达目标，无需到处翻找`
+素材：`assets/user-supplied/local-import.png`
+
+作用：展示扫描本地程序与导入前确认，强调从真实使用环境开始。
+
+### Frame 04：资源整理
+
+核心句：`把入口变成资源节点`
+
+信息密度：中
+
+素材：`assets/user-supplied/action-chain.png`
+
+作用：展示完整资源中心，让应用、网站、文件、脚本变成可整理的入口地图。
+
+### Frame 05：搜索与命令
+
+核心句：`用搜索进入下一步`
+
+信息密度：中
 
 素材：`assets/screenshots/command-palette.png`
 
-作用：突出命令面板把资源、命令和插件结果放到同一入口里。
-
-### Frame 05：本地导入
-
-信息密度：中
-
-核心句：`扫描本地程序，导入浏览器书签`
-
-素材：`assets/screenshots/dashboard.png`
-
-作用：说明桌面、开始菜单快捷方式和 Edge/Chrome 书签可以被收进工作台。
+作用：展示命令面板如何统一资源、命令和插件结果。
 
 ### Frame 06：动作链
 
+核心句：`一次启动一组工作流`
+
 信息密度：中
 
-核心句：`一个入口，启动一组工作流`
+素材：`assets/user-supplied/action-chain.png`
 
-素材：`assets/screenshots/dashboard.png`
+作用：把产品从“启动器”推进到“工作流入口”，用节点图解释连续动作。
 
-作用：把 OrbitStart 从“启动器”推进到“工作流入口”，对应开发、剪辑、学习、科研等多工具场景。
+### Frame 07：插件与边界
 
-### Frame 07：引擎与插件
+核心句：`扩展能力，也定义边界`
 
-信息密度：中偏高
+信息密度：中
 
-核心句：`插件是引擎，也是边界`
+素材：
 
-素材：`assets/screenshots/command-palette.png`
+- `assets/icon/orbitstart-icon.png`
+- `assets/screenshots/command-palette.png`
 
-作用：说明 manifest、命令注册、搜索结果、权限声明、启用/停用，同时保留“早期可扩展阶段”的边界。
+作用：说明 manifest、命令注册、搜索结果、权限声明、启用/停用。
 
 ### Frame 08：轨道控制
 
-信息密度：中
+核心句：`把桌面外壳交还给用户`
 
-核心句：`可控的桌面外壳`
+信息密度：中
 
 素材：`assets/screenshots/settings.png`
 
-作用：覆盖密度、全局热键、安全模式、关闭行为和主页动作。
+作用：说明全局热键、安全模式、关闭行为和主页动作等设置项。
 
-### Frame 09：主题工作室
+### Frame 09：主题系统
 
-信息密度：中
-
-核心句：`Local Galaxy：你的本地星系`
-
-素材：
-
-- `assets/screenshots/theme-studio.png`
-- `assets/screenshots/themes/theme-studio-all.png`
-
-作用：从 Local Galaxy 进入主题系统，说明主题由 token 驱动，不只是单一深色皮肤。
-
-### Frame 10：基础主题
+核心句：`不止一套星空皮肤`
 
 信息密度：中
-
-核心句：`基础主题，适应不同环境`
-
-素材：
-
-- `assets/screenshots/themes/atelier-zero.png`
-- `assets/screenshots/themes/atelier-sky.png`
-- `assets/screenshots/themes/atelier-grey.png`
-- `assets/screenshots/themes/atelier-coal.png`
-- `assets/screenshots/themes/atelier-abyss.png`
-
-作用：对应脚本 9.2，展示亮色、冷色、灰度和暗色基础主题，强调不同光照环境下都能使用。
-
-### Frame 11：高级主题
-
-信息密度：中
-
-核心句：`多样主题，满足不同审美`
 
 素材：
 
 - `assets/screenshots/themes/local-galaxy.png`
-- `assets/screenshots/themes/orbit-dark.png`
-- `assets/screenshots/themes/ink-blue.png`
+- `assets/screenshots/themes/atelier-zero.png`
 - `assets/screenshots/themes/creative-mode.png`
-- `assets/screenshots/themes/all-themes-contact-sheet.png`
+- `assets/screenshots/themes/atelier-abyss.png`
 
-作用：对应脚本 9.3，展示 Local Galaxy 之外的高风格主题，强调不是只有星空风格一种表达。
+作用：展示多主题能力，明确 Local Galaxy 只是其中一种风格。
 
-### Frame 12：本地数据
+### Frame 10：本地数据
+
+核心句：`资源入口可以迁移和备份`
 
 信息密度：中
 
-核心句：`数据留在本地，资源入口可备份`
-
 素材：`assets/screenshots/settings.png`
 
-作用：强调 `%APPDATA%\OrbitStart`、本地目录组织和 JSON 备份。
+作用：说明数据围绕本地目录组织，并支持导出备份。
 
-### Frame 13：状态与反馈
+### Frame 11：状态反馈
 
-信息密度：低
+核心句：`安静运行，也要可追踪`
 
-核心句：`安静运行，可追踪反馈`
+信息密度：中
 
 素材：`assets/screenshots/logs.png`
 
-作用：说明运行日志记录引擎事件、扫描结果和系统反馈。
+作用：说明日志用于记录引擎事件、扫描结果和系统反馈。
 
-### Frame 14：收束
-
-信息密度：低
+### Frame 12：收束
 
 核心句：`OrbitStart：探索无限，始于本地`
+
+信息密度：低
 
 素材：
 
 - `assets/generated/orbitstart-orbit-transition.png`
-- `assets/screenshots/themes/all-themes-contact-sheet.png`
 - `assets/generated/local-galaxy-silk-depth.png`
+- `assets/screenshots/themes/all-themes-contact-sheet.png`
+- `assets/icon/orbitstart-icon.png`
 
-作用：从“散落入口”回到“本地、清楚、可控的工作台”，以新图标和多主题截图收束，而不是只回到 Local Galaxy。
+作用：用品牌图标、多主题和本地工作台概念收束，片尾显示 `OrbitStart 0.4.5`。
 
 ## 建议时长
 
 | Frame | 建议时长 |
 | --- | --- |
-| 01 | 8 秒 |
-| 02 | 10 秒 |
-| 03 | 9 秒 |
-| 04 | 9 秒 |
+| 01 | 7.5 秒 |
+| 02 | 8.5 秒 |
+| 03 | 7.5 秒 |
+| 04 | 8.5 秒 |
 | 05 | 8 秒 |
-| 06 | 9 秒 |
-| 07 | 10 秒 |
-| 08 | 9 秒 |
-| 09 | 10 秒 |
-| 10 | 10 秒 |
-| 11 | 10 秒 |
-| 12 | 8 秒 |
-| 13 | 7 秒 |
-| 14 | 7 秒 |
+| 06 | 8.5 秒 |
+| 07 | 8.5 秒 |
+| 08 | 7.8 秒 |
+| 09 | 9 秒 |
+| 10 | 7.8 秒 |
+| 11 | 7 秒 |
+| 12 | 7 秒 |
 
-总时长约 124 秒。若口播速度偏慢，可把 Frame 09-11 各延长 2 秒，总时长约 2 分 10 秒。
+总时长约 96 秒。
 
 ## 素材清单
 
-### 已就位
-
-- 新图标源图：`E:\OrbitStart\design\app-icons\orbitstart-first-icon-ui.png`
-- 新 Tauri 图标：`E:\OrbitStart\src-tauri\icons\icon.ico`
-- 新 favicon：`E:\OrbitStart\public\favicon.png`
+- 新图标：`E:\OrbitStart\orbitstart-video\assets\icon\orbitstart-icon.png`
 - 主流程截图：`E:\OrbitStart\orbitstart-video\assets\screenshots\dashboard.png`
-- 设置截图：`E:\OrbitStart\orbitstart-video\assets\screenshots\settings.png`
+- 本地导入截图：`E:\OrbitStart\orbitstart-video\assets\user-supplied\local-import.png`
+- 动作链/真实资源中心截图：`E:\OrbitStart\orbitstart-video\assets\user-supplied\action-chain.png`
 - 命令面板截图：`E:\OrbitStart\orbitstart-video\assets\screenshots\command-palette.png`
-- 主题工作室截图：`E:\OrbitStart\orbitstart-video\assets\screenshots\theme-studio.png`
+- 设置截图：`E:\OrbitStart\orbitstart-video\assets\screenshots\settings.png`
 - 日志截图：`E:\OrbitStart\orbitstart-video\assets\screenshots\logs.png`
-- 全主题截图目录：`E:\OrbitStart\orbitstart-video\assets\screenshots\themes`
+- 多主题总览：`E:\OrbitStart\orbitstart-video\assets\screenshots\themes\all-themes-contact-sheet.png`
+- 主题缩略墙：`local-galaxy.png`、`atelier-zero.png`、`creative-mode.png`、`atelier-abyss.png`
 - GPT-image 转场图：`E:\OrbitStart\orbitstart-video\assets\generated\orbitstart-orbit-transition.png`
 - Local Galaxy 质感图：`E:\OrbitStart\orbitstart-video\assets\generated\local-galaxy-silk-depth.png`
 
-### 使用注意
+## 使用注意
 
-- 主题段落不要只展示 Local Galaxy，应明确出现基础亮色、基础暗色和高级主题三类。
-- 左上角品牌位必须使用新图标截图，避免旧 Local Galaxy 图标混入最终视频素材。
-- 多主题镜头用于说明“适配不同环境和审美”，不要把主题系统讲成单纯换皮肤。
-
+- 产品截图只作证据展示，不作裁切背景。
+- 面向普通观众，不使用作者本人、当前电脑、当前资源数量作为核心卖点。
+- 每帧只讲一个动作，避免同时解释过多功能。
+- 鼠标滚轮向下进入下一帧，向上返回上一帧。

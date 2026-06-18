@@ -646,7 +646,7 @@ textarea:focus-visible {
 }
 
 :root[data-theme="local-galaxy"] .topbar {
-  min-height: 72px;
+  min-height: 84px;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--lg-panel-border);
   border-radius: var(--radius);
@@ -854,6 +854,11 @@ textarea:focus-visible {
 :root[data-theme="local-galaxy"] .toast-line > * {
   position: relative;
   z-index: 1;
+}
+
+:root[data-theme="local-galaxy"] .resource-row > .tile-check {
+  position: absolute;
+  z-index: 2;
 }
 
 :root[data-theme="local-galaxy"] .resource-row:hover,
@@ -1338,6 +1343,12 @@ textarea:focus-visible {
   height: auto;
   padding: var(--space-5) var(--space-6) var(--space-6);
   overflow-y: auto;
+}
+
+.workspace > .topbar,
+.workspace > .hero-strip,
+.workspace > .page-layout {
+  flex: 0 0 auto;
 }
 
 .topbar {

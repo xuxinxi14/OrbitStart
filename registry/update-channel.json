@@ -1,10 +1,10 @@
 {
   "schema": 1,
   "channel": "local",
-  "currentVersion": "0.4.0",
+  "currentVersion": "0.4.5",
   "notes": "Local update metadata for internal builds. Tauri updater signing is deferred until a public release channel exists.",
   "artifacts": [
-    "src-tauri/target/release/bundle/msi/OrbitStart_0.4.0_x64_en-US.msi",
-    "src-tauri/target/release/bundle/nsis/OrbitStart_0.4.0_x64-setup.exe"
+    "src-tauri/target/release/bundle/msi/OrbitStart_0.4.5_x64_en-US.msi",
+    "src-tauri/target/release/bundle/nsis/OrbitStart_0.4.5_x64-setup.exe"
   ]
 }

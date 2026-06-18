@@ -69,6 +69,51 @@ test.describe('OrbitStart E2E Basic Verification', () => {
     await expect(page.locator('.resource-row').filter({ hasText: 'Multi Group Test' })).toBeVisible();
   });
 
+  test('should keep Local Galaxy header and batch cards stable with many resources', async ({ page }) => {
+    await page.setViewportSize({ width: 811, height: 500 });
+    await page.evaluate(() => {
+      const items = Array.from({ length: 72 }, (_, index) => {
+        const group = index < 32 ? 'apps' : index < 56 ? 'work' : index < 66 ? 'web' : 'scripts';
+        return {
+          id: `layout-regression-${index}`,
+          title: `Layout Regression ${index}`,
+          subtitle: 'C:\\Program Files\\OrbitStart\\Long Resource Path\\resource.exe',
+          kind: group === 'web' ? 'website' : 'app',
+          group,
+          target: `C:\\Test\\layout-regression-${index}.exe`,
+          aliases: [],
+          tags: [group],
+          icon: group === 'web' ? 'Globe' : 'AppWindow',
+          accent: '#5cc8ff',
+          favorite: false,
+          launchCount: index % 7
+        };
+      });
+      window.localStorage.setItem('orbitstart.browser.items', JSON.stringify(items));
+      const raw = window.localStorage.getItem('orbitstart.browser.snapshot');
+      const snapshot = raw ? JSON.parse(raw) : {};
+      snapshot.settings = { ...(snapshot.settings || {}), activeThemeId: 'local-galaxy', density: 'comfortable' };
+      window.localStorage.setItem('orbitstart.browser.snapshot', JSON.stringify(snapshot));
+    });
+
+    await page.reload();
+    await page.waitForSelector('.app-shell', { timeout: 10000 });
+
+    for (const tabIndex of [0, 1, 2, 3]) {
+      await page.locator('.group-tabs button').nth(tabIndex).click();
+      const titleFits = await page.evaluate(() => {
+        const topbar = document.querySelector('.topbar')?.getBoundingClientRect();
+        const title = document.querySelector('.topbar > div:first-child')?.getBoundingClientRect();
+        return Boolean(topbar && title && title.bottom <= topbar.bottom - 8);
+      });
+      expect(titleFits).toBe(true);
+    }
+
+    await page.locator('.section-actions button').click();
+    const firstRowHeight = await page.locator('.resource-row').first().evaluate((element) => element.getBoundingClientRect().height);
+    expect(firstRowHeight).toBeLessThan(180);
+  });
+
   test('should navigate to Settings and inspect settings view', async ({ page }) => {
     const settingsButton = page.locator('.rail-button[title="设置"]').first();
     await expect(settingsButton).toBeVisible();

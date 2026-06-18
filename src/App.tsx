@@ -1822,7 +1822,7 @@ export default function App() {
           <span><strong>{items.length}</strong>资源</span>
           <span><strong>{enabledPlugins}</strong>启用引擎</span>
           <span><strong>{themes.length}</strong>主题</span>
-          <span><strong>0.4.0</strong>版本</span>
+          <span><strong>0.4.5</strong>版本</span>
         </div>
       </div>
       <div className="setting-card">

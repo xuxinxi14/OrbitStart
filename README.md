@@ -8,7 +8,7 @@ OrbitStart 是一个本地优先、可扩展的 Windows 启动工作台，你可
 
 ## 当前状态
 
-当前版本：`0.4.0`
+当前版本：`0.4.5`
 
 OrbitStart 目前是一个基于 Tauri 2、React 18、TypeScript 和 SQLite 的 Windows 桌面应用。核心功能已经可用，插件系统和主题系统处于早期可扩展阶段，适合继续迭代为个人启动器、工作流入口或本地效率工具。
 
@@ -95,8 +95,8 @@ npm.cmd run tauri:build
 
 ```text
 src-tauri\target\release\orbitstart.exe
-src-tauri\target\release\bundle\nsis\OrbitStart_0.4.0_x64-setup.exe
-src-tauri\target\release\bundle\msi\OrbitStart_0.4.0_x64_en-US.msi
+src-tauri\target\release\bundle\nsis\OrbitStart_0.4.5_x64-setup.exe
+src-tauri\target\release\bundle\msi\OrbitStart_0.4.5_x64_en-US.msi
 ```
 
 ### 安装说明
@@ -104,7 +104,7 @@ src-tauri\target\release\bundle\msi\OrbitStart_0.4.0_x64_en-US.msi
 普通用户只需要下载并运行安装包，不需要安装 Node.js、Rust 或 Tauri 开发环境。发布 Windows GUI 安装包时，优先使用：
 
 ```text
-src-tauri\target\release\bundle\nsis\OrbitStart_0.4.0_x64-setup.exe
+src-tauri\target\release\bundle\nsis\OrbitStart_0.4.5_x64-setup.exe
 ```
 
 如果安装时提示 `Error opening file for writing ... orbitstart.exe`，说明安装器无法写入主程序文件，常见原因是旧版 OrbitStart 仍在托盘后台运行、目标目录没有写入权限，或文件被安全软件短暂占用。此时不要点击 `Ignore`，否则安装器会跳过主程序文件，只留下无法启动的快捷方式。请先从系统托盘退出 OrbitStart，或选择默认的当前用户安装目录后重新安装。

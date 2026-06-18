@@ -13,60 +13,30 @@ export const items: OrbitItem[] = [
   {
     id: "notepad",
     title: "Notepad",
-    subtitle: "Windows 文本编辑器",
+    subtitle: "Windows text editor",
     kind: "app",
     group: "apps",
     target: "C:\\Windows\\System32\\notepad.exe",
-    aliases: ["text", "txt", "记事本"],
+    aliases: ["text", "txt", "notepad"],
     tags: ["system", "editor"],
     icon: "NotebookText",
     accent: "#5cc8ff",
     favorite: true,
-    launchCount: 42,
-    lastLaunchedAt: "刚刚"
+    launchCount: 0
   },
   {
     id: "orbit-folder",
-    title: "OrbitStart 工作区",
+    title: "OrbitStart workspace",
     subtitle: "E:\\OrbitStart",
     kind: "folder",
     group: "work",
     target: "E:\\OrbitStart",
-    aliases: ["orbit", "project", "workspace"],
+    aliases: ["orbit", "project"],
     tags: ["project"],
     icon: "FolderKanban",
     accent: "#8bd450",
     favorite: true,
-    launchCount: 18,
-    lastLaunchedAt: "今天"
-  },
-  {
-    id: "docs",
-    title: "插件 API 文档",
-    subtitle: "本地插件开发文档",
-    kind: "file",
-    group: "plugins",
-    target: "E:\\OrbitStart\\docs\\PLUGIN_API.md",
-    aliases: ["plugin", "sdk", "api"],
-    tags: ["docs", "plugin"],
-    icon: "FileCode2",
-    accent: "#f6b95b",
-    launchCount: 7,
-    lastLaunchedAt: "昨天"
-  },
-  {
-    id: "obsidian",
-    title: "Obsidian",
-    subtitle: "Vault 快速打开入口",
-    kind: "app",
-    group: "plugins",
-    target: "obsidian://open",
-    aliases: ["notes", "vault", "笔记"],
-    tags: ["plugin", "notes"],
-    icon: "Gem",
-    accent: "#9b87f5",
-    launchCount: 31,
-    lastLaunchedAt: "今天"
+    launchCount: 0
   },
   {
     id: "github",
@@ -75,40 +45,26 @@ export const items: OrbitItem[] = [
     kind: "website",
     group: "web",
     target: "https://github.com",
-    aliases: ["git", "repo", "code"],
+    aliases: ["git", "repo"],
     tags: ["web", "dev"],
     icon: "Github",
     accent: "#ffffff",
-    launchCount: 56,
-    lastLaunchedAt: "今天"
+    favorite: false,
+    launchCount: 0
   },
   {
-    id: "deep-work",
-    title: "深度工作动作链",
-    subtitle: "打开项目、编辑器、终端和浏览器",
+    id: "morning-workspace",
+    title: "Morning workspace",
+    subtitle: "Launches a small starter chain",
     kind: "action_chain",
     group: "work",
-    target: "orbit://action-chain/deep-work",
-    aliases: ["focus", "work", "start"],
-    tags: ["automation"],
+    target: "C:\\Windows\\System32\\notepad.exe\nhttps://github.com\nE:\\OrbitStart",
+    aliases: ["chain", "workspace"],
+    tags: ["automation", "template"],
     icon: "Workflow",
     accent: "#ff7a90",
-    favorite: true,
-    launchCount: 12,
-    lastLaunchedAt: "2 小时前"
-  },
-  {
-    id: "powershell-script",
-    title: "清理临时缓存",
-    subtitle: "PowerShell 脚本示例",
-    kind: "script",
-    group: "scripts",
-    target: "orbit://script/clean-temp",
-    aliases: ["clean", "cache", "temp"],
-    tags: ["script"],
-    icon: "TerminalSquare",
-    accent: "#41e0a8",
-    launchCount: 4
+    favorite: false,
+    launchCount: 0
   }
 ];
 
@@ -116,42 +72,74 @@ export const commands: OrbitCommand[] = [
   {
     id: "core.addItem",
     title: "添加资源",
-    subtitle: "添加应用、文件、文件夹、网址或动作链",
+    subtitle: "添加应用、文件、文件夹、网址、脚本或动作链",
     pluginId: "core-items",
     icon: "PlusCircle",
-    keywords: ["add", "new", "import", "添加"]
+    keywords: ["add", "new", "import"]
+  },
+  {
+    id: "core.addActionChain",
+    title: "新建动作链",
+    subtitle: "用多行目标创建一个工作区启动链",
+    pluginId: "core-actions",
+    icon: "Workflow",
+    keywords: ["chain", "workspace", "automation"]
   },
   {
     id: "core.scanShortcuts",
     title: "扫描桌面和开始菜单",
-    subtitle: "导入 Windows 快捷方式",
+    subtitle: "导入 Windows .lnk 快捷方式",
     pluginId: "core-shortcuts",
     icon: "ScanSearch",
-    keywords: ["scan", "shortcut", "导入", "扫描"]
+    keywords: ["scan", "shortcut"]
   },
   {
-    id: "core.openPluginManager",
-    title: "打开插件管理器",
-    subtitle: "启用、停用和审查插件权限",
-    pluginId: "core-plugins",
-    icon: "Blocks",
-    keywords: ["plugin", "extension", "插件"]
+    id: "core.scanBookmarks",
+    title: "导入浏览器书签",
+    subtitle: "扫描 Edge 和 Chrome 书签",
+    pluginId: "core-bookmarks",
+    icon: "Bookmark",
+    keywords: ["bookmark", "browser", "edge", "chrome"]
+  },
+  {
+    id: "core.exportJson",
+    title: "导出 JSON",
+    subtitle: "导出本地资源、插件状态和主题设置",
+    pluginId: "core-backup",
+    icon: "Download",
+    keywords: ["export", "backup"]
   },
   {
     id: "core.themeStudio",
     title: "打开主题工作室",
-    subtitle: "实时调整颜色、圆角、密度和字体",
+    subtitle: "选择主题并实时预览变量",
     pluginId: "core-themes",
     icon: "Palette",
-    keywords: ["theme", "style", "主题"]
+    keywords: ["theme", "style"]
+  },
+  {
+    id: "core.createPluginTemplate",
+    title: "创建插件模板",
+    subtitle: "在本地插件目录生成 Hello Command 模板",
+    pluginId: "core-plugin-dev",
+    icon: "FileCode2",
+    keywords: ["plugin", "template", "sdk"]
+  },
+  {
+    id: "core.openDataDir",
+    title: "打开数据目录",
+    subtitle: "查看数据库、插件、主题和备份文件",
+    pluginId: "core-plugin-dev",
+    icon: "FolderOpen",
+    keywords: ["data", "plugins", "themes"]
   },
   {
     id: "core.commandPalette",
-    title: "命令面板",
+    title: "打开命令面板",
     subtitle: "统一搜索资源、命令和插件结果",
     pluginId: "core-command-palette",
     icon: "Search",
-    keywords: ["command", "search", "命令"]
+    keywords: ["search", "command"]
   }
 ];
 
@@ -159,18 +147,40 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-command-palette",
     name: "Command Palette",
-    version: "0.1.0",
-    description: "统一命令入口和模糊搜索。",
+    version: "0.4.5",
+    description: "统一命令入口、资源搜索和插件结果聚合。",
     enabled: true,
-    permissions: [{ id: "ui:overlay", label: "显示全局浮层", risk: "low" }],
+    builtin: true,
+    permissions: [{ id: "ui:overlay", label: "显示命令面板", risk: "low" }],
     contributes: { commands: 1, searchProviders: 1, themes: 0, views: 1 }
+  },
+  {
+    id: "core-items",
+    name: "Items",
+    version: "0.4.5",
+    description: "管理应用、文件、文件夹、脚本和动作链。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "db:items", label: "读写本地资源目录", risk: "medium" }],
+    contributes: { commands: 2, searchProviders: 1, themes: 0, views: 1 }
+  },
+  {
+    id: "core-websites",
+    name: "Websites",
+    version: "0.4.5",
+    description: "网址、浏览器书签和在线控制台入口。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "shell:open-url", label: "打开网址", risk: "medium" }],
+    contributes: { commands: 2, searchProviders: 1, themes: 0, views: 1 }
   },
   {
     id: "core-shortcuts",
     name: "Windows Shortcuts",
-    version: "0.1.0",
-    description: "扫描桌面、开始菜单和快捷方式。",
+    version: "0.4.5",
+    description: "扫描桌面和开始菜单快捷方式，并保留原始 .lnk 启动能力。",
     enabled: true,
+    builtin: true,
     permissions: [
       { id: "fs:read", label: "读取快捷方式路径", risk: "medium" },
       { id: "shell:open", label: "启动文件和程序", risk: "medium" }
@@ -178,25 +188,84 @@ export const plugins: OrbitPluginManifest[] = [
     contributes: { commands: 1, searchProviders: 1, themes: 0, views: 0 }
   },
   {
-    id: "obsidian-vault-opener",
-    name: "Obsidian Vault Opener",
-    version: "0.0.1",
-    description: "搜索并打开 Obsidian Vault。",
-    enabled: false,
-    permissions: [
-      { id: "fs:read", label: "读取 Vault 列表", risk: "medium" },
-      { id: "shell:open", label: "打开 obsidian:// 链接", risk: "medium" }
-    ],
-    contributes: { commands: 2, searchProviders: 1, themes: 0, views: 0 }
+    id: "core-bookmarks",
+    name: "Browser Bookmarks",
+    version: "0.4.5",
+    description: "从 Edge/Chrome 书签文件导入网站入口。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "fs:read-browser", label: "读取本机浏览器书签文件", risk: "medium" }],
+    contributes: { commands: 1, searchProviders: 1, themes: 0, views: 0 }
   },
   {
-    id: "theme-orbit-dark",
-    name: "Orbit Dark Theme",
-    version: "0.1.0",
-    description: "Local Galaxy 与内置主题变量支持。",
+    id: "core-actions",
+    name: "Action Chains",
+    version: "0.4.5",
+    description: "用一个入口顺序启动多个程序、文件夹和网址。",
     enabled: true,
+    builtin: true,
+    permissions: [{ id: "shell:chain", label: "批量启动多个目标", risk: "high" }],
+    contributes: { commands: 2, searchProviders: 1, themes: 0, views: 1 }
+  },
+  {
+    id: "core-themes",
+    name: "Themes",
+    version: "0.4.5",
+    description: "主题变量、实时预览和本地主题包。",
+    enabled: true,
+    builtin: true,
     permissions: [{ id: "theme:write", label: "应用主题变量", risk: "low" }],
-    contributes: { commands: 0, searchProviders: 0, themes: 1, views: 0 }
+    contributes: { commands: 1, searchProviders: 0, themes: 6, views: 1 }
+  },
+  {
+    id: "core-backup",
+    name: "Backup",
+    version: "0.4.5",
+    description: "JSON 导入导出和本地备份。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "fs:write", label: "写入备份文件", risk: "medium" }],
+    contributes: { commands: 2, searchProviders: 0, themes: 0, views: 0 }
+  },
+  {
+    id: "core-plugin-dev",
+    name: "Plugin Dev Kit",
+    version: "0.4.5",
+    description: "本地插件模板、manifest 校验和开发文档入口。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "fs:write-plugins", label: "写入本地插件模板", risk: "medium" }],
+    contributes: { commands: 2, searchProviders: 0, themes: 0, views: 1 }
+  },
+  {
+    id: "core-clipboard",
+    name: "Clipboard Quick Note",
+    version: "0.4.5",
+    description: "前端读取剪贴板文本并可作为资源备注使用。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "clipboard:read", label: "读取剪贴板文本", risk: "medium" }],
+    contributes: { commands: 1, searchProviders: 1, themes: 0, views: 0 }
+  },
+  {
+    id: "core-window-switcher",
+    name: "Window Switcher",
+    version: "0.4.5",
+    description: "集中管理桌面窗口导航入口。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "windows:enumerate", label: "枚举窗口标题", risk: "high" }],
+    contributes: { commands: 1, searchProviders: 1, themes: 0, views: 0 }
+  },
+  {
+    id: "core-everything",
+    name: "Everything Search",
+    version: "0.4.5",
+    description: "提供统一的本地文件搜索入口，可连接 Everything 服务扩展索引范围。",
+    enabled: true,
+    builtin: true,
+    permissions: [{ id: "fs:search", label: "搜索本地文件", risk: "medium" }],
+    contributes: { commands: 1, searchProviders: 1, themes: 0, views: 0 }
   }
 ];
 
