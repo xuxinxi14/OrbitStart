@@ -1,4 +1,5 @@
 # OrbitStart
+<img width="788" height="804" alt="图标cai" src="https://github.com/user-attachments/assets/489ebaf1-20fa-4a70-8b8d-988bbfec3044" />
 
 <div align="center">
 
@@ -11,15 +12,11 @@
 ![Built with Tauri](https://img.shields.io/badge/Tauri-2.x-24c8db)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-**Release 下载** · **本地优先** · **多主题** · **插件雏形** · **Windows 桌面外壳**
+**Release 下载** · **本地优先** · **多主题** · **Windows 桌面外壳**
 
 </div>
 
 ---
-
-## Screenshot Placeholders
-
-> 后续截图可以放到 `docs/images/`，再把下面的占位替换成真实图片。
 
 <!--
 <p align="center">
@@ -51,6 +48,7 @@ OrbitStart 是一个面向 Windows 的本地资源工作台。它不是单纯的
 - 自动化入口：PowerShell、Python、批处理脚本。
 - 工作区入口：一个动作链按顺序打开多个应用、文件夹和网页。
 
+
 ## Why It Exists
 
 Windows 桌面、开始菜单、浏览器书签和文件夹各自解决了一部分入口问题，但长期使用后资源会变得分散。OrbitStart 尝试解决的是这些问题：
@@ -73,7 +71,6 @@ OrbitStart 面向普通用户的使用方式是从 **GitHub Releases** 下载 Wi
    ```
 
 3. 运行安装包并按提示完成安装。
-4. 如果更新时提示无法覆盖 `orbitstart.exe`，先从系统托盘退出旧版 OrbitStart，再重新运行安装包。
 
 > 普通用户不需要安装 Node.js、Rust、Tauri 或任何开发环境。
 
@@ -95,25 +92,19 @@ OrbitStart 面向普通用户的使用方式是从 **GitHub Releases** 下载 Wi
 
 集中管理常用资源，并按真实任务进行整理。
 
-<!-- screenshot: docs/images/resource-workspace.png -->
+<img width="712" height="503" alt="e3ccf32b6054aaa1ad1dfb5ed868f44" src="https://github.com/user-attachments/assets/c1b1466c-b30e-4464-a105-94b0bf63300c" />
 
 ### Theme Studio
 
 内置多套主题，支持通过主题 token 切换视觉风格。
 
-<!-- screenshot: docs/images/themes.png -->
+<img width="1416" height="1639" alt="all-themes-contact-sheet" src="https://github.com/user-attachments/assets/e0eeb14e-0080-4fbf-92b2-4927b943cc23" />
 
 ### Import Flow
 
 扫描本地程序和浏览器书签，在导入前预览、筛选和排除卸载项。
 
-<!-- screenshot: docs/images/import-flow.png -->
-
-### Desktop Shell
-
-保留桌面软件需要的基本行为：托盘、热键、窗口控制、右键菜单和外部打开。
-
-<!-- screenshot: docs/images/desktop-shell.png -->
+<img width="311" height="314" alt="image" src="https://github.com/user-attachments/assets/ead9c276-3c63-4275-8fda-4524d3928bdf" />
 
 ## Typical Workflows
 
@@ -188,6 +179,7 @@ OrbitStart 的插件系统目前采用 manifest-first 方式：
 - 插件隔离运行时、插件 API 和插件包验证。
 - 更完善的新手引导、示例资源包和主题包分享。
 - 自动更新、签名发布和更完整的 Release channel。
+<img width="493" height="441" alt="image" src="https://github.com/user-attachments/assets/c43d33ef-4615-45a0-9c67-3749f5720a52" />
 
 ## Current Boundaries
 
