@@ -1,4 +1,5 @@
 import type { OrbitCommand, OrbitPluginManifest, SearchResult } from "../types";
+import { WorkerPluginRuntime } from "./workerRuntime";
 
 type CommandHandler = () => void | Promise<void>;
 type SearchProvider = (query: string) => SearchResult[] | Promise<SearchResult[]>;
@@ -7,14 +8,28 @@ export interface RegisteredCommand extends OrbitCommand {
   run: CommandHandler;
 }
 
+interface DisposableRuntime {
+  start?(): void | Promise<void>;
+  dispose(): void;
+}
+
 export class PluginContext {
   private readonly commandRegistry = new Map<string, RegisteredCommand>();
   private readonly searchProviders = new Map<string, SearchProvider>();
+  private readonly runtimes = new Set<DisposableRuntime>();
+  private readonly listeners = new Set<() => void>();
+  private started = false;
+  private disposed = false;
 
   commands = {
     registerCommand: (command: RegisteredCommand) => {
+      if (this.disposed) return () => undefined;
       this.commandRegistry.set(command.id, command);
-      return () => this.commandRegistry.delete(command.id);
+      this.notify();
+      return () => {
+        this.commandRegistry.delete(command.id);
+        this.notify();
+      };
     },
     list: () => Array.from(this.commandRegistry.values()),
     run: async (id: string) => {
@@ -28,8 +43,13 @@ export class PluginContext {
 
   search = {
     registerProvider: (id: string, provider: SearchProvider) => {
+      if (this.disposed) return () => undefined;
       this.searchProviders.set(id, provider);
-      return () => this.searchProviders.delete(id);
+      this.notify();
+      return () => {
+        this.searchProviders.delete(id);
+        this.notify();
+      };
     },
     query: async (text: string) => {
       const providers = Array.from(this.searchProviders.entries());
@@ -52,42 +72,57 @@ export class PluginContext {
       window.dispatchEvent(new CustomEvent("orbit-toast", { detail: message }));
     }
   };
+
+  subscribe(listener: () => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  addRuntime(runtime: DisposableRuntime) {
+    if (this.disposed) {
+      runtime.dispose();
+      return;
+    }
+    this.runtimes.add(runtime);
+    if (this.started) void runtime.start?.();
+  }
+
+  start() {
+    if (this.disposed || this.started) return;
+    this.started = true;
+    for (const runtime of this.runtimes) void runtime.start?.();
+  }
+
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const runtime of this.runtimes) runtime.dispose();
+    this.runtimes.clear();
+    this.commandRegistry.clear();
+    this.searchProviders.clear();
+    this.notify();
+    this.listeners.clear();
+  }
+
+  private notify() {
+    for (const listener of this.listeners) listener();
+  }
 }
 
 function enabled(plugins: OrbitPluginManifest[], id: string) {
   return plugins.some((plugin) => plugin.id === id && plugin.enabled);
 }
 
+function activateLocalPluginRuntime(ctx: PluginContext, plugin: OrbitPluginManifest) {
+  const runtime = new WorkerPluginRuntime(plugin, ctx);
+  ctx.addRuntime(runtime);
+}
+
 export function createOrbitPluginHost(plugins: OrbitPluginManifest[] = []) {
   const ctx = new PluginContext();
 
   for (const plugin of plugins.filter((candidate) => candidate.enabled && !candidate.builtin)) {
-    ctx.commands.registerCommand({
-      id: `${plugin.id}.hello`,
-      title: `${plugin.name}: Hello`,
-      subtitle: "本地插件 manifest 注册的命令",
-      pluginId: plugin.id,
-      icon: "Sparkles",
-      keywords: [plugin.id, plugin.name, "local", "plugin"],
-      run: () => ctx.ui.toast(`${plugin.name} 已响应命令`)
-    });
-
-    ctx.search.registerProvider(`${plugin.id}.manifest-search`, async (query) => {
-      if (!query.trim()) return [];
-      const haystack = `${plugin.id} ${plugin.name} ${plugin.description}`.toLowerCase();
-      if (!haystack.includes(query.toLowerCase()) && query.length < 2) return [];
-      return [
-        {
-          id: `${plugin.id}.manifest-result`,
-          title: plugin.name,
-          subtitle: plugin.description,
-          icon: "Puzzle",
-          source: plugin.id,
-          actionLabel: "运行插件命令",
-          run: () => ctx.ui.toast(`${plugin.name} 搜索结果已执行`)
-        }
-      ];
-    });
+    activateLocalPluginRuntime(ctx, plugin);
   }
 
   if (enabled(plugins, "core-clipboard")) {

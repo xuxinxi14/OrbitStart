@@ -1,0 +1,18 @@
+{
+  "id": "trips-search",
+  "name": "Trips Search",
+  "version": "0.1.0",
+  "description": "Search and open Trip notes attached to OrbitStart resources.",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "ui:toast", "label": "Show toast messages", "risk": "low" },
+    { "id": "trips:read", "label": "Search and open Trip notes", "risk": "medium" }
+  ],
+  "contributes": {
+    "commands": 1,
+    "searchProviders": 1,
+    "themes": 0,
+    "views": 0
+  }
+}

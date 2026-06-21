@@ -109,6 +109,15 @@ struct PluginManifest {
     contributes: PluginContributes,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PluginRuntimeSource {
+    id: String,
+    entry: String,
+    source: String,
+    permissions: Vec<String>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ThemeManifest {
@@ -161,9 +170,37 @@ struct CatalogExport {
     exported_at: String,
     items: Vec<OrbitItem>,
     #[serde(default)]
+    trips: Vec<Trip>,
+    #[serde(default)]
     plugins: Vec<PluginManifest>,
     #[serde(default)]
     active_theme_id: Option<String>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Trip {
+    id: String,
+    item_id: String,
+    title: String,
+    content: String,
+    category: String,
+    status: Option<String>,
+    tags: Vec<String>,
+    pinned: bool,
+    created_at: i64,
+    updated_at: i64,
+    last_viewed_at: Option<i64>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TripSearchResult {
+    trip: Trip,
+    item_id: String,
+    item_title: String,
+    item_icon: String,
+    item_kind: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -190,6 +227,13 @@ fn now_string() -> String {
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
     seconds.to_string()
+}
+
+fn now_i64() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
 }
 
 fn app_data_dir() -> Result<PathBuf, String> {
@@ -279,6 +323,23 @@ fn init_db(conn: &Connection) -> Result<(), String> {
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS trips (
+            id TEXT PRIMARY KEY,
+            item_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT 'note',
+            status TEXT,
+            tags TEXT NOT NULL DEFAULT '[]',
+            pinned INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            last_viewed_at INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_trips_item_id ON trips(item_id);
+        CREATE INDEX IF NOT EXISTS idx_trips_updated_at ON trips(updated_at DESC);
         "#,
     )
     .map_err(|error| format!("Failed to initialize database: {error}"))?;
@@ -525,7 +586,7 @@ fn plugin(
     PluginManifest {
         id: id.to_string(),
         name: name.to_string(),
-        version: "0.4.8".to_string(),
+        version: "0.5.0".to_string(),
         description: description.to_string(),
         enabled: true,
         builtin: true,
@@ -686,6 +747,102 @@ fn read_local_plugin_manifests() -> Result<Vec<PluginManifest>, String> {
         }
     }
     Ok(manifests)
+}
+
+fn validated_plugin_id(id: &str) -> Result<String, String> {
+    let trimmed = id.trim();
+    if trimmed.is_empty() {
+        return Err("Plugin id cannot be empty".to_string());
+    }
+    if trimmed.contains("..")
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || !trimmed
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == '.')
+    {
+        return Err(format!("Invalid plugin id: {trimmed}"));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn local_plugin_dir(plugin_id: &str) -> Result<Option<PathBuf>, String> {
+    let plugin_id = validated_plugin_id(plugin_id)?;
+    let root = plugins_dir()?;
+    let dir = root.join(plugin_id);
+    if !dir.exists() {
+        return Ok(None);
+    }
+
+    let root_canonical = fs::canonicalize(&root)
+        .map_err(|error| format!("Failed to resolve plugin root: {error}"))?;
+    let dir_canonical = fs::canonicalize(&dir)
+        .map_err(|error| format!("Failed to resolve plugin directory: {error}"))?;
+    if !dir_canonical.starts_with(root_canonical) {
+        return Err("Plugin directory is outside the OrbitStart plugin root".to_string());
+    }
+    Ok(Some(dir_canonical))
+}
+
+#[tauri::command]
+fn read_plugin_runtime(id: String) -> Result<Option<PluginRuntimeSource>, String> {
+    let requested_id = validated_plugin_id(&id)?;
+    let Some(dir) = local_plugin_dir(&id)? else {
+        return Ok(None);
+    };
+
+    let manifest_path = dir.join("plugin.json");
+    let manifest_text = fs::read_to_string(&manifest_path)
+        .map_err(|error| format!("Failed to read plugin manifest: {error}"))?;
+    let manifest: PluginManifest = serde_json::from_str(&manifest_text)
+        .map_err(|error| format!("Invalid plugin manifest: {error}"))?;
+    let plugin_id = validated_plugin_id(&manifest.id)?;
+    if plugin_id != requested_id {
+        return Err(format!(
+            "Plugin manifest id mismatch: requested {requested_id}, found {plugin_id}"
+        ));
+    }
+
+    let entries = [("main.js", dir.join("main.js")), ("main.ts", dir.join("main.ts"))];
+    let Some((entry, path)) = entries.iter().find(|(_, path)| path.is_file()) else {
+        return Ok(None);
+    };
+    let size = fs::metadata(path)
+        .map_err(|error| format!("Failed to inspect plugin runtime: {error}"))?
+        .len();
+    if size > 256 * 1024 {
+        return Err(format!(
+            "Plugin runtime {entry} is too large ({size} bytes, max 262144)"
+        ));
+    }
+    let source = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read plugin runtime source: {error}"))?;
+    Ok(Some(PluginRuntimeSource {
+        id: plugin_id,
+        entry: entry.to_string(),
+        source,
+        permissions: manifest
+            .permissions
+            .iter()
+            .map(|permission| permission.id.clone())
+            .collect(),
+    }))
+}
+
+#[tauri::command]
+fn record_plugin_runtime_event(plugin_id: String, level: String, message: String) -> Result<(), String> {
+    let conn = open_db()?;
+    let plugin_id = validated_plugin_id(&plugin_id).unwrap_or_else(|_| "plugin-runtime".to_string());
+    let level = match level.as_str() {
+        "info" | "warn" | "error" => level,
+        _ => "info".to_string(),
+    };
+    let message = if message.chars().count() > 1000 {
+        format!("{}...", message.chars().take(1000).collect::<String>())
+    } else {
+        message
+    };
+    log_plugin_event(&conn, &plugin_id, &level, &message)
 }
 
 fn all_plugins(conn: &Connection) -> Result<Vec<PluginManifest>, String> {
@@ -1786,7 +1943,7 @@ fn insert_item(conn: &Connection, input: &OrbitItemInput) -> Result<OrbitItem, S
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, NULL, ?12, ?12)
         "#,
         params![
-            id,
+            &id,
             input.title,
             input.subtitle,
             input.kind,
@@ -1831,7 +1988,7 @@ fn upsert_scanned_item(conn: &Connection, input: &OrbitItemInput) -> Result<Orbi
             updated_at = excluded.updated_at
         "#,
         params![
-            id,
+            &id,
             input.title,
             input.subtitle,
             input.kind,
@@ -2057,6 +2214,312 @@ fn catalog_snapshot() -> Result<CatalogSnapshot, String> {
     })
 }
 
+fn normalize_trip_category(category: &str) -> String {
+    match category {
+        "shortcut" | "workflow" | "note" | "status" | "reference" => category.to_string(),
+        _ => "note".to_string(),
+    }
+}
+
+fn normalize_trip_status(category: &str, status: Option<String>) -> Option<String> {
+    if category != "status" {
+        return None;
+    }
+    match status.as_deref() {
+        Some("todo") | Some("in-progress") | Some("done") | Some("needs-update") => status,
+        _ => Some("todo".to_string()),
+    }
+}
+
+fn normalize_trip_tags(tags: Vec<String>) -> Vec<String> {
+    unique_strings(
+        tags.into_iter()
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+            .take(12)
+            .collect(),
+    )
+}
+
+fn trip_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Trip> {
+    let tags_json: String = row.get(6)?;
+    let tags = serde_json::from_str::<Vec<String>>(&tags_json).unwrap_or_default();
+    Ok(Trip {
+        id: row.get(0)?,
+        item_id: row.get(1)?,
+        title: row.get(2)?,
+        content: row.get(3)?,
+        category: row.get(4)?,
+        status: row.get(5)?,
+        tags,
+        pinned: row.get::<_, i64>(7)? != 0,
+        created_at: row.get(8)?,
+        updated_at: row.get(9)?,
+        last_viewed_at: row.get(10)?,
+    })
+}
+
+fn get_trip(conn: &Connection, id: &str) -> Result<Option<Trip>, String> {
+    conn.query_row(
+        r#"
+        SELECT id, item_id, title, content, category, status, tags, pinned, created_at, updated_at, last_viewed_at
+        FROM trips
+        WHERE id = ?1
+        "#,
+        params![id],
+        trip_from_row,
+    )
+    .optional()
+    .map_err(|error| format!("Failed to read trip: {error}"))
+}
+
+fn all_trips(conn: &Connection) -> Result<Vec<Trip>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, item_id, title, content, category, status, tags, pinned, created_at, updated_at, last_viewed_at
+            FROM trips
+            ORDER BY pinned DESC, updated_at DESC
+            "#,
+        )
+        .map_err(|error| format!("Failed to prepare trips query: {error}"))?;
+    let rows = stmt
+        .query_map([], trip_from_row)
+        .map_err(|error| format!("Failed to query trips: {error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to map trips: {error}"))
+}
+
+#[tauri::command]
+fn list_trips(item_id: String) -> Result<Vec<Trip>, String> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, item_id, title, content, category, status, tags, pinned, created_at, updated_at, last_viewed_at
+            FROM trips
+            WHERE item_id = ?1
+            ORDER BY pinned DESC, updated_at DESC
+            "#,
+        )
+        .map_err(|error| format!("Failed to prepare trip list: {error}"))?;
+    let rows = stmt
+        .query_map(params![item_id], trip_from_row)
+        .map_err(|error| format!("Failed to list trips: {error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to map trips: {error}"))
+}
+
+#[tauri::command]
+fn create_trip(
+    app: tauri::AppHandle,
+    item_id: String,
+    title: String,
+    content: String,
+    category: String,
+    status: Option<String>,
+    tags: Vec<String>,
+    pinned: Option<bool>,
+) -> Result<Trip, String> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err("Trip title cannot be empty".to_string());
+    }
+    if title.chars().count() > 50 {
+        return Err("Trip title is too long".to_string());
+    }
+    if content.chars().count() > 4000 {
+        return Err("Trip content is too long".to_string());
+    }
+
+    let conn = open_db()?;
+    let item = get_item(&conn, &item_id)?.ok_or_else(|| "Item not found".to_string())?;
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM trips WHERE item_id = ?1", params![item.id], |row| row.get(0))
+        .map_err(|error| format!("Failed to count trips: {error}"))?;
+    if count >= 50 {
+        return Err("Each resource can have at most 50 trips".to_string());
+    }
+
+    let category = normalize_trip_category(&category);
+    let status = normalize_trip_status(&category, status);
+    let tags = normalize_trip_tags(tags);
+    let now = now_i64();
+    let id = make_id("trip", &format!("{item_id}:{title}:{now}"));
+    conn.execute(
+        r#"
+        INSERT INTO trips (id, item_id, title, content, category, status, tags, pinned, created_at, updated_at, last_viewed_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?9, NULL)
+        "#,
+        params![
+            id,
+            item_id,
+            title,
+            content,
+            category,
+            status,
+            serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string()),
+            if pinned.unwrap_or(false) { 1 } else { 0 },
+            now,
+        ],
+    )
+    .map_err(|error| format!("Failed to create trip: {error}"))?;
+    log_plugin_event(&conn, "trips", "info", &format!("Trip created for {}", item.title))?;
+    let _ = app.emit("orbit://trips-changed", ());
+    get_trip(&conn, &id)?.ok_or_else(|| "Trip not found after create".to_string())
+}
+
+#[tauri::command]
+fn update_trip(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    content: String,
+    category: String,
+    status: Option<String>,
+    tags: Vec<String>,
+    pinned: bool,
+) -> Result<Trip, String> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err("Trip title cannot be empty".to_string());
+    }
+    if title.chars().count() > 50 {
+        return Err("Trip title is too long".to_string());
+    }
+    if content.chars().count() > 4000 {
+        return Err("Trip content is too long".to_string());
+    }
+    let conn = open_db()?;
+    let category = normalize_trip_category(&category);
+    let status = normalize_trip_status(&category, status);
+    let tags = normalize_trip_tags(tags);
+    let now = now_i64();
+    conn.execute(
+        r#"
+        UPDATE trips
+        SET title = ?2,
+            content = ?3,
+            category = ?4,
+            status = ?5,
+            tags = ?6,
+            pinned = ?7,
+            updated_at = ?8
+        WHERE id = ?1
+        "#,
+        params![
+            id,
+            title,
+            content,
+            category,
+            status,
+            serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string()),
+            if pinned { 1 } else { 0 },
+            now,
+        ],
+    )
+    .map_err(|error| format!("Failed to update trip: {error}"))?;
+    let _ = app.emit("orbit://trips-changed", ());
+    get_trip(&conn, &id)?.ok_or_else(|| "Trip not found after update".to_string())
+}
+
+#[tauri::command]
+fn mark_trip_viewed(id: String) -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE trips SET last_viewed_at = ?2 WHERE id = ?1",
+        params![&id, now_i64()],
+    )
+    .map_err(|error| format!("Failed to mark trip viewed: {error}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_trip(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute("DELETE FROM trips WHERE id = ?1", params![&id])
+        .map_err(|error| format!("Failed to delete trip: {error}"))?;
+    let _ = app.emit("orbit://trips-changed", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn search_trips(query: String) -> Result<Vec<TripSearchResult>, String> {
+    let conn = open_db()?;
+    let trimmed = query.trim().to_lowercase();
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+                t.id, t.item_id, t.title, t.content, t.category, t.status, t.tags, t.pinned, t.created_at, t.updated_at, t.last_viewed_at,
+                i.title, i.icon, i.kind
+            FROM trips t
+            LEFT JOIN items i ON i.id = t.item_id
+            ORDER BY t.pinned DESC, t.updated_at DESC
+            LIMIT 200
+            "#,
+        )
+        .map_err(|error| format!("Failed to prepare trip search: {error}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                trip_from_row(row)?,
+                row.get::<_, Option<String>>(11)?.unwrap_or_else(|| "Unknown resource".to_string()),
+                row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "Lightbulb".to_string()),
+                row.get::<_, Option<String>>(13)?.unwrap_or_else(|| "file".to_string()),
+            ))
+        })
+        .map_err(|error| format!("Failed to query trip search: {error}"))?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        let (trip, item_title, item_icon, item_kind) =
+            row.map_err(|error| format!("Failed to map trip search result: {error}"))?;
+        if !trimmed.is_empty() {
+            let haystack = format!(
+                "{} {} {} {} {}",
+                trip.title,
+                trip.content,
+                trip.category,
+                trip.status.clone().unwrap_or_default(),
+                trip.tags.join(" ")
+            )
+            .to_lowercase();
+            if !haystack.contains(&trimmed) {
+                continue;
+            }
+        }
+        results.push(TripSearchResult {
+            item_id: trip.item_id.clone(),
+            trip,
+            item_title,
+            item_icon,
+            item_kind,
+        });
+        if results.len() >= 20 {
+            break;
+        }
+    }
+    Ok(results)
+}
+
+#[tauri::command]
+fn trip_count_for_items(item_ids: Vec<String>) -> Result<HashMap<String, i64>, String> {
+    let conn = open_db()?;
+    let mut counts = HashMap::new();
+    for id in item_ids {
+        let count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM trips WHERE item_id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        counts.insert(id, count);
+    }
+    Ok(counts)
+}
+
 #[tauri::command]
 fn create_item(app: tauri::AppHandle, input: OrbitItemInput) -> Result<OrbitItem, String> {
     let conn = open_db()?;
@@ -2183,9 +2646,12 @@ fn update_item(app: tauri::AppHandle, item: OrbitItem) -> Result<OrbitItem, Stri
 #[tauri::command]
 fn delete_item(app: tauri::AppHandle, id: String) -> Result<(), String> {
     let conn = open_db()?;
+    conn.execute("DELETE FROM trips WHERE item_id = ?1", params![&id])
+        .map_err(|error| format!("Failed to cleanup trips: {error}"))?;
     conn.execute("DELETE FROM items WHERE id = ?1", params![id])
         .map_err(|error| format!("Failed to delete item: {error}"))?;
     let _ = app.emit("orbit://refresh-resources", ());
+    let _ = app.emit("orbit://trips-changed", ());
     Ok(())
 }
 
@@ -2729,6 +3195,7 @@ fn export_catalog_json() -> Result<ExportResult, String> {
         version: 2,
         exported_at: now_string(),
         items: all_items(&conn)?,
+        trips: all_trips(&conn)?,
         plugins: all_plugins(&conn)?,
         active_theme_id: Some(setting(&conn, "active_theme_id", "local-galaxy")?),
     };
@@ -2765,6 +3232,30 @@ fn import_catalog_json(app: tauri::AppHandle, json: String) -> Result<Vec<OrbitI
         };
         let _ = insert_item(&conn, &input);
     }
+    for trip in export.trips {
+        let category = normalize_trip_category(&trip.category);
+        let status = normalize_trip_status(&category, trip.status);
+        let tags = normalize_trip_tags(trip.tags);
+        let _ = conn.execute(
+            r#"
+            INSERT OR REPLACE INTO trips (id, item_id, title, content, category, status, tags, pinned, created_at, updated_at, last_viewed_at)
+            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            "#,
+            params![
+                trip.id,
+                trip.item_id,
+                trip.title,
+                trip.content,
+                category,
+                status,
+                serde_json::to_string(&tags).unwrap_or_else(|_| "[]".to_string()),
+                if trip.pinned { 1 } else { 0 },
+                trip.created_at,
+                trip.updated_at,
+                trip.last_viewed_at,
+            ],
+        );
+    }
     if let Some(theme_id) = export.active_theme_id {
         let _ = set_setting_value(&conn, "active_theme_id", &theme_id);
     }
@@ -2780,10 +3271,32 @@ fn ensure_local_templates() -> Result<(), String> {
             .map_err(|error| format!("Failed to create hello plugin: {error}"))?;
         fs::write(plugin_root.join("plugin.json"), hello_plugin_manifest())
             .map_err(|error| format!("Failed to write hello plugin manifest: {error}"))?;
-        fs::write(plugin_root.join("main.ts"), hello_plugin_source())
+        fs::write(plugin_root.join("main.ts"), hello_plugin_source_for("hello-command"))
             .map_err(|error| format!("Failed to write hello plugin source: {error}"))?;
+        fs::write(
+            plugin_root.join("orbitstart-plugin-api.d.ts"),
+            hello_plugin_api_types(),
+        )
+        .map_err(|error| format!("Failed to write hello plugin API types: {error}"))?;
         fs::write(plugin_root.join("README.md"), hello_plugin_readme())
             .map_err(|error| format!("Failed to write hello plugin README: {error}"))?;
+    }
+
+    let trips_plugin_root = plugins_dir()?.join("trips-search");
+    if !trips_plugin_root.exists() {
+        fs::create_dir_all(&trips_plugin_root)
+            .map_err(|error| format!("Failed to create trips plugin: {error}"))?;
+        fs::write(trips_plugin_root.join("plugin.json"), trips_plugin_manifest())
+            .map_err(|error| format!("Failed to write trips plugin manifest: {error}"))?;
+        fs::write(trips_plugin_root.join("main.ts"), trips_plugin_source())
+            .map_err(|error| format!("Failed to write trips plugin source: {error}"))?;
+        fs::write(
+            trips_plugin_root.join("orbitstart-plugin-api.d.ts"),
+            hello_plugin_api_types(),
+        )
+        .map_err(|error| format!("Failed to write trips plugin API types: {error}"))?;
+        fs::write(trips_plugin_root.join("README.md"), trips_plugin_readme())
+            .map_err(|error| format!("Failed to write trips plugin README: {error}"))?;
     }
 
     let theme_root = themes_dir()?.join("aurora-focus");
@@ -2814,6 +3327,68 @@ fn hello_plugin_manifest() -> &'static str {
 "#
 }
 
+fn trips_plugin_manifest() -> &'static str {
+    r#"{
+  "id": "trips-search",
+  "name": "Trips Search",
+  "version": "0.1.0",
+  "description": "Search and open Trip notes attached to OrbitStart resources.",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "ui:toast", "label": "Show toast messages", "risk": "low" },
+    { "id": "trips:read", "label": "Search and open Trip notes", "risk": "medium" }
+  ],
+  "contributes": { "commands": 1, "searchProviders": 1, "themes": 0, "views": 0 }
+}
+"#
+}
+
+fn trips_plugin_source() -> &'static str {
+    r#"import type { OrbitPlugin } from "./orbitstart-plugin-api";
+
+const plugin: OrbitPlugin = {
+  activate(ctx) {
+    ctx.commands.registerCommand({
+      id: "open",
+      title: "打开 Trips",
+      subtitle: "查看资源提示笔记、快捷键、流程和状态记录。",
+      icon: "Lightbulb",
+      keywords: ["trips", "notes", "usage", "提示", "笔记"],
+      run: async () => {
+        await ctx.trips.open("", "");
+        ctx.ui.toast("已打开 Trips 页面");
+      }
+    });
+
+    ctx.search.registerProvider("content", async (query) => {
+      const q = query.trim();
+      if (q.length < 2) return [];
+      const results = await ctx.trips.search(q);
+      return results.map((result) => {
+        const preview = result.trip.content.replace(/[#*_`|>-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 88);
+        return {
+          id: `trips-search.${result.trip.id}`,
+          title: `[Trip] ${result.itemTitle} · ${result.trip.title}`,
+          subtitle: preview || result.trip.tags.join(", ") || "资源提示笔记",
+          icon: "Lightbulb",
+          source: "trips-search",
+          actionLabel: "查看 Trip",
+          run: () => ctx.trips.open(result.itemId, result.trip.id)
+        };
+      });
+    });
+  }
+};
+
+export default plugin;
+"#
+}
+
+fn hello_plugin_source_for(plugin_id: &str) -> String {
+    hello_plugin_source().replace("hello-command", plugin_id)
+}
+
 fn hello_plugin_source() -> &'static str {
     r#"import type { OrbitPlugin } from "./orbitstart-plugin-api";
 
@@ -2827,10 +3402,106 @@ const plugin: OrbitPlugin = {
       keywords: ["hello", "demo"],
       run: () => ctx.ui.toast("Hello from a local plugin")
     });
+
+    ctx.search.registerProvider("hello-command.search", async (query) => {
+      if (!query.toLowerCase().includes("hello")) return [];
+      return [
+        {
+          id: "hello-command.searchResult",
+          title: "Hello plugin search result",
+          subtitle: "This result is produced by main.ts inside an isolated worker.",
+          icon: "Sparkles",
+          source: "hello-command",
+          actionLabel: "Show toast",
+          run: () => ctx.ui.toast(`Hello search matched: ${query}`)
+        }
+      ];
+    });
   }
 };
 
 export default plugin;
+"#
+}
+
+fn hello_plugin_api_types() -> &'static str {
+    r#"export interface OrbitPlugin {
+  activate(ctx: OrbitPluginContext): void | Promise<void>;
+  deactivate?(): void | Promise<void>;
+}
+
+export interface OrbitPluginContext {
+  commands: {
+    registerCommand(command: RegisteredCommand): () => void;
+  };
+  search: {
+    registerProvider(id: string, provider: SearchProvider): () => void;
+  };
+  ui: {
+    toast(message: string): void;
+  };
+  settings: PluginSettings;
+  storage: PluginStorage;
+  trips: TripsApi;
+}
+
+export interface RegisteredCommand {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  keywords: string[];
+  run(): void | Promise<void>;
+}
+
+export type SearchProvider = (query: string) => SearchResult[] | Promise<SearchResult[]>;
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  source: string;
+  actionLabel: string;
+  run?(): void | Promise<void>;
+}
+
+export interface PluginSettings {
+  get<T = unknown>(key: string, fallbackValue?: T): Promise<T | null>;
+  set<T = unknown>(key: string, value: T): Promise<boolean>;
+}
+
+export interface PluginStorage {
+  get<T = unknown>(key: string, fallbackValue?: T): Promise<T | null>;
+  set<T = unknown>(key: string, value: T): Promise<boolean>;
+  remove(key: string): Promise<boolean>;
+  list(): Promise<Array<{ key: string; value: unknown }>>;
+}
+
+export interface TripsApi {
+  search(query: string): Promise<TripSearchResult[]>;
+  open(itemId: string, tripId?: string): Promise<boolean>;
+}
+
+export interface TripSearchResult {
+  trip: {
+    id: string;
+    itemId: string;
+    title: string;
+    content: string;
+    category: string;
+    status?: string | null;
+    tags: string[];
+    pinned: boolean;
+    createdAt: number;
+    updatedAt: number;
+    lastViewedAt?: number | null;
+  };
+  itemId: string;
+  itemTitle: string;
+  itemIcon: string;
+  itemKind: string;
+}
 "#
 }
 
@@ -2844,8 +3515,25 @@ Common OrbitStart plugin APIs:
 - `ctx.commands.registerCommand`
 - `ctx.search.registerProvider`
 - `ctx.ui.toast`
-- `ctx.settings`
-- `ctx.storage`
+- `ctx.settings` (requires `settings:plugin`)
+- `ctx.storage` (requires `storage:plugin`)
+
+Runtime notes:
+
+- `main.ts` runs inside an isolated Web Worker.
+- Keep runtime code self-contained; static imports are not supported yet.
+- `import type` is allowed for local editor typings.
+"#
+}
+
+fn trips_plugin_readme() -> &'static str {
+    r#"# Trips Search
+
+Adds command-palette search for Trip notes attached to OrbitStart resources.
+
+- `ctx.trips.search(query)` reads Trip notes through OrbitStart's host bridge.
+- `ctx.trips.open(itemId, tripId)` opens the Trips page or highlights a Trip for a resource.
+- The plugin does not receive generic native invoke access.
 "#
 }
 
@@ -2925,8 +3613,10 @@ fn create_plugin_template(name: String) -> Result<String, String> {
         .replace("Hello Command", &name);
     fs::write(path.join("plugin.json"), manifest)
         .map_err(|error| format!("Failed to write plugin manifest: {error}"))?;
-    fs::write(path.join("main.ts"), hello_plugin_source())
+    fs::write(path.join("main.ts"), hello_plugin_source_for(&slug))
         .map_err(|error| format!("Failed to write plugin source: {error}"))?;
+    fs::write(path.join("orbitstart-plugin-api.d.ts"), hello_plugin_api_types())
+        .map_err(|error| format!("Failed to write plugin API types: {error}"))?;
     fs::write(path.join("README.md"), hello_plugin_readme())
         .map_err(|error| format!("Failed to write plugin README: {error}"))?;
 
@@ -3177,6 +3867,13 @@ pub fn run() {
             pick_resource_input,
             pick_icon_image,
             create_group,
+            list_trips,
+            create_trip,
+            update_trip,
+            mark_trip_viewed,
+            delete_trip,
+            search_trips,
+            trip_count_for_items,
             update_item,
             delete_item,
             launch_item,
@@ -3192,6 +3889,8 @@ pub fn run() {
             set_density,
             set_close_behavior,
             set_safe_mode,
+            read_plugin_runtime,
+            record_plugin_runtime_event,
             export_catalog_json,
             import_catalog_json,
             create_plugin_template,

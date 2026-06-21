@@ -1,9 +1,9 @@
 # OrbitStart Plugin Development
 
 OrbitStart uses a manifest-first plugin model. The current runtime supports
-safe local discovery, enable/disable state, permissions, logs, commands, and
-search-provider registration. Arbitrary third-party code execution stays behind
-the manifest permission model.
+safe local discovery, enable/disable state, permissions, logs, isolated Worker
+execution, command registration, search-provider registration, toast feedback,
+and plugin-scoped settings/storage.
 
 ## Plugin layout
 
@@ -35,6 +35,16 @@ my-command-plugin/
   }
 }
 ```
+
+Add these permissions only when the plugin uses the matching API:
+
+- `ui:toast`: `ctx.ui.toast`
+- `storage:plugin`: `ctx.storage.*`
+- `settings:plugin`: `ctx.settings.*`
+- `trips:read`: `ctx.trips.search` and `ctx.trips.open`
+
+`contributes.commands` and `contributes.searchProviders` are enforced by the
+Worker bridge as registration limits.
 
 ## Local install path
 
@@ -69,12 +79,28 @@ Implemented now:
 - enable/disable state
 - permission display
 - plugin logs
-- manifest-driven local command/search examples
+- isolated Worker execution for `main.js` or `main.ts`
+- command registration through `ctx.commands.registerCommand`
+- search-provider registration through `ctx.search.registerProvider`
+- proxied search result actions
+- toast feedback through `ctx.ui.toast`
+- plugin-scoped async settings and storage
+- Trips host bridge for searching and opening resource hint notes
 - safe mode for disabling local plugins
+
+Runtime boundaries:
+
+- OrbitStart loads `main.js` first, then `main.ts`.
+- Keep runtime code self-contained. Static runtime imports are not supported yet.
+- `import type` is allowed in `main.ts` for local typings.
+- The supported TypeScript subset is JavaScript-compatible code plus simple
+  `import type` and `OrbitPlugin` annotations. For complex TypeScript, bundle to
+  `main.js` before packaging.
+- Worker code has no DOM access. Host APIs must go through `ctx`.
+- Network APIs are blocked until a dedicated network permission is implemented.
 
 Planned next:
 
-- isolated worker execution for `main.ts`
 - signed package verification
 - per-plugin settings UI
 - network permission prompts

@@ -44,8 +44,8 @@ npm.cmd run tauri:build
 - Tauri build: passed.
 - Playwright preview: dashboard, settings, and plugin detail screenshots captured with no console errors.
 - Application: `E:\OrbitStart\src-tauri\target\release\orbitstart.exe`
-- MSI: `E:\OrbitStart\src-tauri\target\release\bundle\msi\OrbitStart_0.4.8_x64_en-US.msi`
-- NSIS: `E:\OrbitStart\src-tauri\target\release\bundle\nsis\OrbitStart_0.4.8_x64-setup.exe`
+- MSI: `E:\OrbitStart\src-tauri\target\release\bundle\msi\OrbitStart_0.5.0_x64_en-US.msi`
+- NSIS: `E:\OrbitStart\src-tauri\target\release\bundle\nsis\OrbitStart_0.5.0_x64-setup.exe`
 
 ## Remaining hardening
 

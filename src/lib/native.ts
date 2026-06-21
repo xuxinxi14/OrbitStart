@@ -1,8 +1,19 @@
 import { phase0Snapshot } from "../data/catalog";
-import type { ExportResult, OrbitItem, OrbitItemInput, Phase0Snapshot } from "../types";
+import type {
+  ExportResult,
+  OrbitItem,
+  OrbitItemInput,
+  Phase0Snapshot,
+  PluginRuntimeSource,
+  Trip,
+  TripInput,
+  TripSearchResult,
+  TripUpdateInput
+} from "../types";
 
 const storageKey = "orbitstart.browser.items";
 const snapshotKey = "orbitstart.browser.snapshot";
+const tripsKey = "orbitstart.browser.trips";
 
 async function invokeNative<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -48,6 +59,36 @@ function readBrowserSnapshot(): Phase0Snapshot {
 function writeBrowserSnapshot(snapshot: Phase0Snapshot) {
   window.localStorage.setItem(snapshotKey, JSON.stringify(snapshot));
   writeBrowserItems(snapshot.items);
+}
+
+function readBrowserTrips(): Trip[] {
+  const raw = window.localStorage.getItem(tripsKey);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as Trip[];
+  } catch {
+    return [];
+  }
+}
+
+function writeBrowserTrips(trips: Trip[]) {
+  window.localStorage.setItem(tripsKey, JSON.stringify(trips));
+}
+
+function sortTrips(trips: Trip[]) {
+  return trips.slice().sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+}
+
+function normalizeTripInput(input: TripInput | (TripUpdateInput & { itemId?: string })) {
+  const category = input.category;
+  return {
+    ...input,
+    title: input.title.trim().slice(0, 50),
+    content: input.content.slice(0, 4000),
+    status: category === "status" ? (input.status ?? "todo") : null,
+    tags: Array.from(new Set(input.tags.map((tag) => tag.trim()).filter(Boolean))).slice(0, 12),
+    pinned: Boolean(input.pinned)
+  };
 }
 
 function createBrowserItem(input: OrbitItemInput): OrbitItem {
@@ -201,6 +242,117 @@ export async function deleteItem(id: string): Promise<void> {
     await invokeNative<void>("delete_item", { id });
   } catch {
     writeBrowserItems(readBrowserItems().filter((item) => item.id !== id));
+    writeBrowserTrips(readBrowserTrips().filter((trip) => trip.itemId !== id));
+  }
+}
+
+export async function listTrips(itemId: string): Promise<Trip[]> {
+  try {
+    return await invokeNative<Trip[]>("list_trips", { itemId });
+  } catch {
+    return sortTrips(readBrowserTrips().filter((trip) => trip.itemId === itemId));
+  }
+}
+
+export async function createTrip(input: TripInput): Promise<Trip> {
+  const normalized = normalizeTripInput(input);
+  try {
+    return await invokeNative<Trip>("create_trip", normalized);
+  } catch {
+    const now = Math.floor(Date.now() / 1000);
+    const trip: Trip = {
+      id: `trip-${input.itemId}-${Date.now()}`,
+      itemId: input.itemId,
+      title: normalized.title,
+      content: normalized.content,
+      category: normalized.category,
+      status: normalized.status,
+      tags: normalized.tags,
+      pinned: normalized.pinned,
+      createdAt: now,
+      updatedAt: now,
+      lastViewedAt: null
+    };
+    writeBrowserTrips([trip, ...readBrowserTrips()]);
+    return trip;
+  }
+}
+
+export async function updateTrip(id: string, updates: TripUpdateInput): Promise<Trip> {
+  const normalized = normalizeTripInput(updates);
+  try {
+    return await invokeNative<Trip>("update_trip", { id, ...normalized });
+  } catch {
+    const trips = readBrowserTrips();
+    const next = trips.map((trip) => (
+      trip.id === id
+        ? {
+            ...trip,
+            ...normalized,
+            updatedAt: Math.floor(Date.now() / 1000)
+          }
+        : trip
+    ));
+    writeBrowserTrips(next);
+    const updated = next.find((trip) => trip.id === id);
+    if (!updated) throw new Error(`Trip not found: ${id}`);
+    return updated;
+  }
+}
+
+export async function markTripViewed(id: string): Promise<void> {
+  try {
+    await invokeNative<void>("mark_trip_viewed", { id });
+  } catch {
+    const now = Math.floor(Date.now() / 1000);
+    writeBrowserTrips(readBrowserTrips().map((trip) => (trip.id === id ? { ...trip, lastViewedAt: now } : trip)));
+  }
+}
+
+export async function deleteTrip(id: string): Promise<void> {
+  try {
+    await invokeNative<void>("delete_trip", { id });
+  } catch {
+    writeBrowserTrips(readBrowserTrips().filter((trip) => trip.id !== id));
+  }
+}
+
+export async function searchTrips(query: string): Promise<TripSearchResult[]> {
+  try {
+    return await invokeNative<TripSearchResult[]>("search_trips", { query });
+  } catch {
+    const q = query.trim().toLowerCase();
+    const items = readBrowserItems();
+    const itemById = new Map(items.map((item) => [item.id, item]));
+    return sortTrips(readBrowserTrips())
+      .filter((trip) => {
+        if (!q) return true;
+        return `${trip.title} ${trip.content} ${trip.category} ${trip.status ?? ""} ${trip.tags.join(" ")}`.toLowerCase().includes(q);
+      })
+      .slice(0, 20)
+      .map((trip) => {
+        const item = itemById.get(trip.itemId);
+        return {
+          trip,
+          itemId: trip.itemId,
+          itemTitle: item?.title ?? "Unknown resource",
+          itemIcon: item?.icon ?? "Lightbulb",
+          itemKind: item?.kind ?? "file"
+        };
+      });
+  }
+}
+
+export async function tripCountForItems(itemIds: string[]): Promise<Record<string, number>> {
+  try {
+    return await invokeNative<Record<string, number>>("trip_count_for_items", { itemIds });
+  } catch {
+    const counts: Record<string, number> = {};
+    for (const itemId of itemIds) counts[itemId] = 0;
+    for (const trip of readBrowserTrips()) {
+      if (itemIds.includes(trip.itemId)) counts[trip.itemId] = (counts[trip.itemId] ?? 0) + 1;
+    }
+    return counts;
   }
 }
 
@@ -255,6 +407,23 @@ export async function setPluginEnabled(id: string, enabled: boolean): Promise<Ph
     };
     writeBrowserSnapshot(next);
     return next;
+  }
+}
+
+export async function readPluginRuntime(id: string): Promise<PluginRuntimeSource | null> {
+  try {
+    return await invokeNative<PluginRuntimeSource | null>("read_plugin_runtime", { id });
+  } catch {
+    return null;
+  }
+}
+
+export async function recordPluginRuntimeEvent(pluginId: string, level: "info" | "warn" | "error", message: string): Promise<void> {
+  try {
+    await invokeNative<void>("record_plugin_runtime_event", { pluginId, level, message });
+  } catch {
+    const logger = level === "error" ? console.error : level === "warn" ? console.warn : console.info;
+    logger(`[${pluginId}] ${message}`);
   }
 }
 

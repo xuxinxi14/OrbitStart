@@ -23,6 +23,7 @@ import {
   Info,
   Image,
   LayoutDashboard,
+  Lightbulb,
   NotebookText,
   Palette,
   PanelsTopLeft,
@@ -48,6 +49,7 @@ import {
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { LocalGalaxyBackdrop } from "./components/LocalGalaxyBackdrop";
+import { TripPanel } from "./components/TripPanel";
 import {
   contextMenuFromEvent,
   copyText,
@@ -59,6 +61,7 @@ import {
 import { installDesktopShell } from "./desktop/desktopShell";
 import { closeWindow, getAppWindow, minimizeWindow, startWindowDrag, toggleMaximizeWindow } from "./desktop/windowControls";
 import { buildSortedResults, matchesItemEnhanced as scoreMatchesItem, matchesCommandEnhanced as scoreMatchesCommand, scoreItem } from "./lib/searchEngine";
+import { tripCategoryLabels } from "./lib/tripTemplates";
 import {
   shouldShowOnboarding,
   completeOnboarding,
@@ -86,6 +89,8 @@ import {
   previewScanShortcuts,
   previewScanBrowserBookmarks,
   importScannedItems,
+  searchTrips,
+  tripCountForItems,
   setActiveTheme,
   setCloseBehavior,
   setDensity,
@@ -108,12 +113,20 @@ import type {
   OrbitPluginManifest,
   PluginLog,
   SearchResult,
-  ThemeManifest
+  ThemeManifest,
+  TripSearchResult
 } from "./types";
 
 const appIconSrc = new URL("../design/app-icons/orbitstart-first-icon-ui.png", import.meta.url).href;
 
-type ViewId = "dashboard" | "settings" | "logs";
+const tripStatusLabels: Record<string, string> = {
+  todo: "待处理",
+  "in-progress": "进行中",
+  done: "已完成",
+  "needs-update": "需更新"
+};
+
+type ViewId = "dashboard" | "trips" | "settings" | "logs";
 type SettingsSection = "general" | "plugins" | "themes" | "dev" | "data" | "about";
 type AuxPanel = "settings" | "plugins" | "themes" | "about";
 type AppDialogState =
@@ -126,7 +139,7 @@ type AppDialogState =
 function getInitialView(): ViewId {
   if (typeof window === "undefined") return "dashboard";
   const requestedView = new URLSearchParams(window.location.search).get("view") ?? window.location.hash.replace("#", "");
-  return requestedView === "settings" || requestedView === "logs" ? requestedView : "dashboard";
+  return requestedView === "settings" || requestedView === "logs" || requestedView === "trips" ? requestedView : "dashboard";
 }
 
 function getAuxPanel(): AuxPanel | null {
@@ -319,6 +332,11 @@ function pluginDetail(plugin: OrbitPluginManifest) {
       author: "Local Plugin Template",
       features: ["命令注册", "搜索结果展示", "通知反馈"],
       demo: "在命令面板搜索 hello，可看到本地插件命令。"
+    },
+    "trips-search": {
+      author: "OrbitStart Local Plugin",
+      features: ["Trip 内容搜索", "命令面板入口", "打开资源 TripPanel"],
+      demo: "在命令面板输入 Trip 内容关键词，可直接跳到对应资源提示。"
     }
   };
 
@@ -370,6 +388,11 @@ export default function App() {
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
+  const [tripCounts, setTripCounts] = useState<Record<string, number>>({});
+  const [tripPanelItem, setTripPanelItem] = useState<OrbitItem | null>(null);
+  const [tripPanelHighlightId, setTripPanelHighlightId] = useState<string | null>(null);
+  const [tripsQuery, setTripsQuery] = useState("");
+  const [tripSearchResults, setTripSearchResults] = useState<TripSearchResult[]>([]);
   const hotkeyInputRef = useRef<HTMLInputElement>(null);
 
   const [importPreview, setImportPreview] = useState<{
@@ -379,6 +402,7 @@ export default function App() {
     searchQuery: string;
   } | null>(null);
   const pluginHost = useMemo(() => createOrbitPluginHost(plugins), [plugins]);
+  const [pluginHostRevision, setPluginHostRevision] = useState(0);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLElement>(null);
@@ -407,9 +431,36 @@ export default function App() {
     applySnapshot(snapshot);
   }
 
+  async function refreshTripCounts(scopeItems = items) {
+    if (scopeItems.length === 0) {
+      setTripCounts({});
+      return;
+    }
+    const counts = await tripCountForItems(scopeItems.map((item) => item.id));
+    setTripCounts(counts);
+  }
+
+  async function refreshTripSearch(queryText = tripsQuery) {
+    const results = await searchTrips(queryText);
+    setTripSearchResults(results);
+  }
+
+  async function handleTripsChanged() {
+    await refreshTripCounts();
+    await refreshTripSearch();
+  }
+
   useEffect(() => {
     reload().catch((error) => setToast(`加载失败：${String(error)}`));
   }, []);
+
+  useEffect(() => {
+    refreshTripCounts(items).catch((error) => console.warn("Failed to load trip counts", error));
+  }, [items]);
+
+  useEffect(() => {
+    refreshTripSearch(tripsQuery).catch((error) => console.warn("Failed to search trips", error));
+  }, [tripsQuery]);
 
   useEffect(() => {
     const onToast = (event: Event) => {
@@ -419,6 +470,26 @@ export default function App() {
     window.addEventListener("orbit-toast", onToast);
     return () => window.removeEventListener("orbit-toast", onToast);
   }, []);
+
+  useEffect(() => {
+    const onOpenTrip = (event: Event) => {
+      const detail = (event as CustomEvent<{ itemId: string; tripId?: string }>).detail;
+      if (!detail.itemId) {
+        setActiveView("trips");
+        return;
+      }
+      const item = items.find((candidate) => candidate.id === detail.itemId);
+      if (!item) {
+        setToast("未找到关联资源");
+        return;
+      }
+      setActiveView("trips");
+      setTripPanelItem(item);
+      setTripPanelHighlightId(detail.tripId ?? null);
+    };
+    window.addEventListener("orbit-open-trip", onOpenTrip);
+    return () => window.removeEventListener("orbit-open-trip", onOpenTrip);
+  }, [items]);
 
   function focusSearch() {
     setActiveView("dashboard");
@@ -561,6 +632,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const unsubscribe = pluginHost.subscribe(() => setPluginHostRevision((revision) => revision + 1));
+    pluginHost.start();
+    return () => {
+      unsubscribe();
+      pluginHost.dispose();
+    };
+  }, [pluginHost]);
+
+  useEffect(() => {
     let cancelled = false;
     pluginHost.search.query(paletteQuery).then((results) => {
       if (!cancelled) setPluginResults(results);
@@ -568,7 +648,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [paletteQuery, pluginHost]);
+  }, [paletteQuery, pluginHost, pluginHostRevision]);
 
   const activeTheme = useMemo(() => {
     return themes.find((theme) => theme.id === settings?.activeThemeId) ?? themes[0];
@@ -634,6 +714,7 @@ export default function App() {
   }, [activeGroup, items, plugins, query]);
 
   const favoriteItems = filteredItems.filter((item) => item.favorite);
+  const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const enabledPlugins = plugins.filter((plugin) => plugin.enabled).length;
   const density = settings?.density === "compact" ? "compact" : "comfortable";
   const isLocalGalaxyTheme = activeTheme?.id === "local-galaxy";
@@ -655,6 +736,7 @@ export default function App() {
   const appShellStyle = isLocalGalaxyTheme ? galaxyAssetVars : undefined;
   const activeViewMeta: Record<ViewId, { title: string; subtitle: string }> = {
     dashboard: { title: "资源中心", subtitle: "统一管理本地应用、文件、网址与自动化入口" },
+    trips: { title: "Trips", subtitle: "为资源记录快捷键、流程、参数和状态提示" },
     settings: { title: "设置中心", subtitle: "系统偏好、引擎、主题与数据维护" },
     logs: { title: "运行日志", subtitle: "查看最近的引擎事件、扫描结果与系统反馈" }
   };
@@ -1287,7 +1369,7 @@ export default function App() {
     // Auto-reset selection when results change, keep in bounds
     setPaletteSelectedIndex((prev) => Math.min(prev, Math.max(0, raw.length - 1)));
     return raw;
-  }, [commands, items, paletteQuery, pluginHost, pluginResults, plugins]);
+  }, [commands, items, paletteQuery, pluginHost, pluginHostRevision, pluginResults, plugins]);
 
   /** Keyboard navigation handler for command palette. */
   const handlePaletteKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -1317,6 +1399,7 @@ export default function App() {
 
   const navItems: Array<{ id: ViewId; title: string; icon: JSX.Element }> = [
     { id: "dashboard", title: "工作台", icon: <LayoutDashboard size={21} /> },
+    { id: "trips", title: "Trips", icon: <Lightbulb size={21} /> },
     { id: "settings", title: "设置", icon: <Settings size={21} /> },
     { id: "logs", title: "日志", icon: <Database size={21} /> }
   ];
@@ -1504,6 +1587,18 @@ export default function App() {
                 {!batchMode && (
                   <div className="tile-actions">
                     <button
+                      className={`trip-action ${tripCounts[item.id] ? "has-trips" : ""}`}
+                      title="Trips"
+                      onClick={() => {
+                        setTripPanelItem(item);
+                        setTripPanelHighlightId(null);
+                      }}
+                      disabled={busy}
+                    >
+                      <Lightbulb size={15} />
+                      {tripCounts[item.id] > 0 && <span className="trip-badge">{tripCounts[item.id]}</span>}
+                    </button>
+                    <button
                       className={`favorite-action ${item.favorite ? "is-favorite" : ""}`}
                       title="星标"
                       onClick={() => toggleFavorite(item)}
@@ -1569,6 +1664,96 @@ export default function App() {
       </section>
     </section>
   );
+
+  const renderTripsPage = () => {
+    const totalTrips = Object.values(tripCounts).reduce((sum, value) => sum + value, 0);
+    const resourceWithTrips = Object.values(tripCounts).filter((value) => value > 0).length;
+    return (
+      <section className="page-layout trips-page">
+        <section className="kpi-grid trips-kpis" aria-label="Trips 概览">
+          <article className="kpi-card">
+            <span>Trips 总数</span>
+            <strong>{totalTrips}</strong>
+            <em>资源使用提示</em>
+          </article>
+          <article className="kpi-card">
+            <span>覆盖资源</span>
+            <strong>{resourceWithTrips}</strong>
+            <em>{items.length} 个资源中已记录</em>
+          </article>
+          <article className="kpi-card">
+            <span>搜索结果</span>
+            <strong>{tripSearchResults.length}</strong>
+            <em>{tripsQuery ? "当前关键词" : "最近更新"}</em>
+          </article>
+          <article className="kpi-card">
+            <span>插件入口</span>
+            <strong>{pluginEnabled("trips-search") ? "启用" : "停用"}</strong>
+            <em>命令面板增强</em>
+          </article>
+        </section>
+
+        <section className="surface-panel trips-surface">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Trip Notes</p>
+              <h2>资源提示笔记</h2>
+            </div>
+            <div className="search-shell trips-search-shell">
+              <Search size={17} />
+              <input value={tripsQuery} onChange={(event) => setTripsQuery(event.target.value)} placeholder="搜索 Trip 标题、内容、状态或标签..." />
+              {tripsQuery && (
+                <button type="button" title="清空" onClick={() => setTripsQuery("")}>
+                  <X size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="trips-result-grid">
+            {tripSearchResults.map((result) => {
+              const item = itemById.get(result.itemId);
+              return (
+                <article key={result.trip.id} className="trip-result-card">
+                  <div className="trip-result-head">
+                    <span className={`trip-chip ${result.trip.category}`}>{tripCategoryLabels[result.trip.category]}</span>
+                    {result.trip.status && <span className={`trip-status ${result.trip.status}`}>{tripStatusLabels[result.trip.status] ?? result.trip.status}</span>}
+                  </div>
+                  <h3>{result.trip.title}</h3>
+                  <p>{result.trip.content.replace(/[#*_`|>-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 160) || "暂无内容"}</p>
+                  <div className="trip-result-meta">
+                    <span>
+                      <Icon name={result.itemIcon} size={15} />
+                      {result.itemTitle}
+                    </span>
+                    <button
+                      type="button"
+                      className="secondary-action compact-action"
+                      onClick={() => {
+                        if (item) {
+                          setTripPanelItem(item);
+                          setTripPanelHighlightId(result.trip.id);
+                        }
+                      }}
+                    >
+                      查看
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            {tripSearchResults.length === 0 && (
+              <div className="empty-state trips-empty-state">
+                <Lightbulb size={28} />
+                <strong>还没有匹配的 Trips</strong>
+                <span>从资源卡片上的灯泡按钮开始记录。</span>
+              </div>
+            )}
+          </div>
+        </section>
+      </section>
+    );
+  };
 
   const renderPlugins = () => (
     <section className="settings-page-grid plugins-settings">
@@ -1881,7 +2066,7 @@ export default function App() {
           <span><strong>{items.length}</strong>资源</span>
           <span><strong>{enabledPlugins}</strong>启用引擎</span>
           <span><strong>{themes.length}</strong>主题</span>
-          <span><strong>0.4.8</strong>版本</span>
+          <span><strong>0.5.0</strong>版本</span>
         </div>
       </div>
       <div className="setting-card">
@@ -2610,6 +2795,7 @@ export default function App() {
         </section>
 
         {activeView === "dashboard" && renderDashboard()}
+        {activeView === "trips" && renderTripsPage()}
         {activeView === "settings" && renderSettings()}
         {activeView === "logs" && renderLogs()}
       </section>
@@ -2625,6 +2811,18 @@ export default function App() {
       )}
 
       {dialog && renderAppDialog()}
+
+      {tripPanelItem && (
+        <TripPanel
+          item={tripPanelItem}
+          highlightTripId={tripPanelHighlightId}
+          onClose={() => {
+            setTripPanelItem(null);
+            setTripPanelHighlightId(null);
+          }}
+          onChanged={handleTripsChanged}
+        />
+      )}
 
       {paletteOpen && (
         <section

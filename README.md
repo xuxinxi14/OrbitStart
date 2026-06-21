@@ -7,7 +7,7 @@
 
 把应用、文件夹、网址、脚本、书签、工作区和动作入口收进一个本地启动工作台。
 
-![Version](https://img.shields.io/badge/version-0.4.8-2f81f7)
+![Version](https://img.shields.io/badge/version-0.5.0-2f81f7)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with Tauri](https://img.shields.io/badge/Tauri-2.x-24c8db)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -67,7 +67,7 @@ OrbitStart 面向普通用户的使用方式是从 **GitHub Releases** 下载 Wi
 2. 下载最新版安装包，通常命名类似：
 
    ```text
-   OrbitStart_0.4.8_x64-setup.exe
+   OrbitStart_0.5.0_x64-setup.exe
    ```
 
 3. 运行安装包并按提示完成安装。
