@@ -8,6 +8,7 @@ use std::fs;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
@@ -49,6 +50,8 @@ struct OrbitItem {
     favorite: bool,
     launch_count: u32,
     last_launched_at: Option<String>,
+    #[serde(default)]
+    sort_order: i64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -149,6 +152,7 @@ struct AppSettings {
     global_hotkey: String,
     close_behavior: String,
     data_dir: String,
+    auto_pinned_mode: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -201,6 +205,81 @@ struct TripSearchResult {
     item_title: String,
     item_icon: String,
     item_kind: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObsidianVaultConfig {
+    id: String,
+    name: String,
+    path: String,
+    enabled: bool,
+    last_indexed_at: Option<String>,
+    file_count: u32,
+    task_count: u32,
+    open_in_obsidian: bool,
+    created_at: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObsidianNoteIndex {
+    id: String,
+    vault_id: String,
+    vault_name: String,
+    title: String,
+    file_path: String,
+    relative_path: String,
+    tags: Vec<String>,
+    frontmatter: Option<HashMap<String, String>>,
+    modified_at: String,
+    indexed_at: String,
+    task_count: u32,
+    favorite: bool,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ObsidianTask {
+    id: String,
+    vault_id: String,
+    vault_name: String,
+    note_id: String,
+    note_title: String,
+    file_path: String,
+    relative_path: String,
+    line_number: i64,
+    raw_text: String,
+    text: String,
+    completed: bool,
+    tags: Vec<String>,
+    due_date: Option<String>,
+    priority: Option<String>,
+    completed_at: Option<String>,
+    modified_at: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ObsidianSearchResult {
+    kind: String,
+    id: String,
+    title: String,
+    subtitle: String,
+    icon: String,
+    vault_id: String,
+    vault_name: String,
+    relative_path: String,
+    line_number: Option<i64>,
+    task: Option<ObsidianTask>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ObsidianScanResult {
+    vault: ObsidianVaultConfig,
+    note_count: u32,
+    task_count: u32,
 }
 
 #[derive(Clone, Serialize)]
@@ -340,16 +419,89 @@ fn init_db(conn: &Connection) -> Result<(), String> {
 
         CREATE INDEX IF NOT EXISTS idx_trips_item_id ON trips(item_id);
         CREATE INDEX IF NOT EXISTS idx_trips_updated_at ON trips(updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS obsidian_vaults (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            path TEXT NOT NULL UNIQUE,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            last_indexed_at TEXT,
+            file_count INTEGER NOT NULL DEFAULT 0,
+            task_count INTEGER NOT NULL DEFAULT 0,
+            open_in_obsidian INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS obsidian_notes (
+            id TEXT PRIMARY KEY,
+            vault_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            tags_json TEXT NOT NULL DEFAULT '[]',
+            frontmatter_json TEXT,
+            modified_at TEXT NOT NULL,
+            indexed_at TEXT NOT NULL,
+            favorite INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (vault_id) REFERENCES obsidian_vaults(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS obsidian_tasks (
+            id TEXT PRIMARY KEY,
+            vault_id TEXT NOT NULL,
+            note_id TEXT NOT NULL,
+            file_path TEXT NOT NULL,
+            relative_path TEXT NOT NULL,
+            line_number INTEGER NOT NULL,
+            raw_text TEXT NOT NULL,
+            text TEXT NOT NULL,
+            completed INTEGER NOT NULL DEFAULT 0,
+            tags_json TEXT NOT NULL DEFAULT '[]',
+            due_date TEXT,
+            priority TEXT,
+            completed_at TEXT,
+            modified_at TEXT NOT NULL,
+            FOREIGN KEY (vault_id) REFERENCES obsidian_vaults(id) ON DELETE CASCADE,
+            FOREIGN KEY (note_id) REFERENCES obsidian_notes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_obsidian_notes_vault ON obsidian_notes(vault_id);
+        CREATE INDEX IF NOT EXISTS idx_obsidian_notes_modified ON obsidian_notes(modified_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_obsidian_tasks_vault ON obsidian_tasks(vault_id);
+        CREATE INDEX IF NOT EXISTS idx_obsidian_tasks_completed ON obsidian_tasks(completed);
+        CREATE INDEX IF NOT EXISTS idx_obsidian_tasks_due ON obsidian_tasks(due_date);
         "#,
     )
     .map_err(|error| format!("Failed to initialize database: {error}"))?;
+
+    ensure_table_column(
+        conn,
+        "obsidian_notes",
+        "favorite",
+        "ALTER TABLE obsidian_notes ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    ensure_table_column(
+        conn,
+        "items",
+        "sort_order",
+        "ALTER TABLE items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_items_sort_order ON items(sort_order)",
+        [],
+    )
+    .map_err(|error| format!("Failed to create sort_order index: {error}"))?;
 
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
         .map_err(|error| format!("Failed to count items: {error}"))?;
 
     if count == 0 {
-        for item in seed_items() {
+        let mut seeds = seed_items();
+        seeds.reverse();
+        for item in seeds {
             insert_item(conn, &item)?;
         }
     }
@@ -361,6 +513,29 @@ fn init_db(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+fn ensure_table_column(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    alter_sql: &str,
+) -> Result<(), String> {
+    let mut stmt = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| format!("Failed to inspect table {table}: {error}"))?;
+    let rows = stmt
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| format!("Failed to read table info for {table}: {error}"))?;
+    for row in rows {
+        if row.map_err(|error| format!("Failed to map table info for {table}: {error}"))? == column
+        {
+            return Ok(());
+        }
+    }
+    conn.execute(alter_sql, [])
+        .map_err(|error| format!("Failed to migrate table {table}: {error}"))?;
+    Ok(())
+}
+
 fn ensure_default_settings(conn: &Connection) -> Result<(), String> {
     for (key, value) in [
         ("active_theme_id", "local-galaxy"),
@@ -368,6 +543,7 @@ fn ensure_default_settings(conn: &Connection) -> Result<(), String> {
         ("density", "comfortable"),
         ("global_hotkey", "Ctrl+Alt+Space"),
         ("close_behavior", "tray"),
+        ("auto_pinned_mode", "false"),
     ] {
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?1, ?2)",
@@ -407,6 +583,7 @@ fn app_settings(conn: &Connection) -> Result<AppSettings, String> {
         global_hotkey: setting(conn, "global_hotkey", "Ctrl+Alt+Space")?,
         close_behavior: setting(conn, "close_behavior", "tray")?,
         data_dir: app_data_dir()?.to_string_lossy().to_string(),
+        auto_pinned_mode: setting(conn, "auto_pinned_mode", "false")? == "true",
     })
 }
 
@@ -586,7 +763,7 @@ fn plugin(
     PluginManifest {
         id: id.to_string(),
         name: name.to_string(),
-        version: "0.5.0".to_string(),
+        version: "0.5.5".to_string(),
         description: description.to_string(),
         enabled: true,
         builtin: true,
@@ -687,6 +864,24 @@ fn default_plugins() -> Vec<PluginManifest> {
             "提供统一的本地文件搜索入口，可连接 Everything 服务扩展索引范围。",
             vec![permission("fs:search", "搜索本地文件", "medium")],
             contributes(1, 1, 0, 0),
+        ),
+        plugin(
+            "core-obsidian",
+            "Obsidian",
+            "Read-only local vault indexing for Markdown notes and checkbox tasks.",
+            vec![
+                permission(
+                    "fs:read-obsidian",
+                    "Read selected Obsidian vaults",
+                    "medium",
+                ),
+                permission(
+                    "shell:open-obsidian",
+                    "Open notes through Obsidian protocol",
+                    "medium",
+                ),
+            ],
+            contributes(1, 1, 0, 1),
         ),
     ]
 }
@@ -803,7 +998,10 @@ fn read_plugin_runtime(id: String) -> Result<Option<PluginRuntimeSource>, String
         ));
     }
 
-    let entries = [("main.js", dir.join("main.js")), ("main.ts", dir.join("main.ts"))];
+    let entries = [
+        ("main.js", dir.join("main.js")),
+        ("main.ts", dir.join("main.ts")),
+    ];
     let Some((entry, path)) = entries.iter().find(|(_, path)| path.is_file()) else {
         return Ok(None);
     };
@@ -830,9 +1028,14 @@ fn read_plugin_runtime(id: String) -> Result<Option<PluginRuntimeSource>, String
 }
 
 #[tauri::command]
-fn record_plugin_runtime_event(plugin_id: String, level: String, message: String) -> Result<(), String> {
+fn record_plugin_runtime_event(
+    plugin_id: String,
+    level: String,
+    message: String,
+) -> Result<(), String> {
     let conn = open_db()?;
-    let plugin_id = validated_plugin_id(&plugin_id).unwrap_or_else(|_| "plugin-runtime".to_string());
+    let plugin_id =
+        validated_plugin_id(&plugin_id).unwrap_or_else(|_| "plugin-runtime".to_string());
     let level = match level.as_str() {
         "info" | "warn" | "error" => level,
         _ => "info".to_string(),
@@ -1938,9 +2141,10 @@ fn insert_item(conn: &Connection, input: &OrbitItemInput) -> Result<OrbitItem, S
         r#"
         INSERT OR IGNORE INTO items (
             id, title, subtitle, kind, group_id, target, aliases_json, tags_json,
-            icon, accent, favorite, launch_count, last_launched_at, created_at, updated_at
+            icon, accent, favorite, launch_count, last_launched_at, created_at, updated_at,
+            sort_order
         )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, NULL, ?12, ?12)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, NULL, ?12, ?12, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM items))
         "#,
         params![
             &id,
@@ -1974,9 +2178,10 @@ fn upsert_scanned_item(conn: &Connection, input: &OrbitItemInput) -> Result<Orbi
         r#"
         INSERT INTO items (
             id, title, subtitle, kind, group_id, target, aliases_json, tags_json,
-            icon, accent, favorite, launch_count, last_launched_at, created_at, updated_at
+            icon, accent, favorite, launch_count, last_launched_at, created_at, updated_at,
+            sort_order
         )
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, NULL, ?12, ?12)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0, NULL, ?12, ?12, (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM items))
         ON CONFLICT(id) DO UPDATE SET
             title = excluded.title,
             subtitle = excluded.subtitle,
@@ -2011,7 +2216,7 @@ fn get_item(conn: &Connection, id: &str) -> Result<Option<OrbitItem>, String> {
     conn.query_row(
         r#"
         SELECT id, title, subtitle, kind, group_id, target, aliases_json, tags_json,
-               icon, accent, favorite, launch_count, last_launched_at
+               icon, accent, favorite, launch_count, last_launched_at, sort_order
         FROM items
         WHERE id = ?1
         "#,
@@ -2026,7 +2231,7 @@ fn get_item_by_target(conn: &Connection, target: &str) -> Result<Option<OrbitIte
     conn.query_row(
         r#"
         SELECT id, title, subtitle, kind, group_id, target, aliases_json, tags_json,
-               icon, accent, favorite, launch_count, last_launched_at
+               icon, accent, favorite, launch_count, last_launched_at, sort_order
         FROM items
         WHERE target = ?1
         "#,
@@ -2113,6 +2318,7 @@ fn item_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<OrbitItem> {
     let tags_json: String = row.get(7)?;
     let favorite: i64 = row.get(10)?;
     let launch_count: i64 = row.get(11)?;
+    let sort_order: i64 = row.get(13)?;
 
     Ok(OrbitItem {
         id: row.get(0)?,
@@ -2128,6 +2334,7 @@ fn item_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<OrbitItem> {
         favorite: favorite != 0,
         launch_count: launch_count.max(0) as u32,
         last_launched_at: row.get(12)?,
+        sort_order,
     })
 }
 
@@ -2136,9 +2343,9 @@ fn all_items(conn: &Connection) -> Result<Vec<OrbitItem>, String> {
         .prepare(
             r#"
             SELECT id, title, subtitle, kind, group_id, target, aliases_json, tags_json,
-                   icon, accent, favorite, launch_count, last_launched_at
+                   icon, accent, favorite, launch_count, last_launched_at, sort_order
             FROM items
-            ORDER BY favorite DESC, launch_count DESC, title COLLATE NOCASE ASC
+            ORDER BY sort_order ASC, title COLLATE NOCASE ASC
             "#,
         )
         .map_err(|error| format!("Failed to prepare item query: {error}"))?;
@@ -2335,7 +2542,11 @@ fn create_trip(
     let conn = open_db()?;
     let item = get_item(&conn, &item_id)?.ok_or_else(|| "Item not found".to_string())?;
     let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM trips WHERE item_id = ?1", params![item.id], |row| row.get(0))
+        .query_row(
+            "SELECT COUNT(*) FROM trips WHERE item_id = ?1",
+            params![item.id],
+            |row| row.get(0),
+        )
         .map_err(|error| format!("Failed to count trips: {error}"))?;
     if count >= 50 {
         return Err("Each resource can have at most 50 trips".to_string());
@@ -2364,7 +2575,12 @@ fn create_trip(
         ],
     )
     .map_err(|error| format!("Failed to create trip: {error}"))?;
-    log_plugin_event(&conn, "trips", "info", &format!("Trip created for {}", item.title))?;
+    log_plugin_event(
+        &conn,
+        "trips",
+        "info",
+        &format!("Trip created for {}", item.title),
+    )?;
     let _ = app.emit("orbit://trips-changed", ());
     get_trip(&conn, &id)?.ok_or_else(|| "Trip not found after create".to_string())
 }
@@ -2464,9 +2680,12 @@ fn search_trips(query: String) -> Result<Vec<TripSearchResult>, String> {
         .query_map([], |row| {
             Ok((
                 trip_from_row(row)?,
-                row.get::<_, Option<String>>(11)?.unwrap_or_else(|| "Unknown resource".to_string()),
-                row.get::<_, Option<String>>(12)?.unwrap_or_else(|| "Lightbulb".to_string()),
-                row.get::<_, Option<String>>(13)?.unwrap_or_else(|| "file".to_string()),
+                row.get::<_, Option<String>>(11)?
+                    .unwrap_or_else(|| "Unknown resource".to_string()),
+                row.get::<_, Option<String>>(12)?
+                    .unwrap_or_else(|| "Lightbulb".to_string()),
+                row.get::<_, Option<String>>(13)?
+                    .unwrap_or_else(|| "file".to_string()),
             ))
         })
         .map_err(|error| format!("Failed to query trip search: {error}"))?;
@@ -2521,6 +2740,25 @@ fn trip_count_for_items(item_ids: Vec<String>) -> Result<HashMap<String, i64>, S
 }
 
 #[tauri::command]
+fn reorder_items(app: tauri::AppHandle, ordered_ids: Vec<String>) -> Result<(), String> {
+    let mut conn = open_db()?;
+    let now = now_string();
+    let tx = conn
+        .transaction()
+        .map_err(|error| format!("Failed to start transaction: {error}"))?;
+    for (index, id) in ordered_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE items SET sort_order = ?1, updated_at = ?2 WHERE id = ?3",
+            params![index as i64, &now, id],
+        )
+        .map_err(|error| format!("Failed to update sort order of item {id}: {error}"))?;
+    }
+    tx.commit().map_err(|error| format!("Failed to commit transaction: {error}"))?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    Ok(())
+}
+
+#[tauri::command]
 fn create_item(app: tauri::AppHandle, input: OrbitItemInput) -> Result<OrbitItem, String> {
     let conn = open_db()?;
     let item = insert_item(&conn, &input)?;
@@ -2553,6 +2791,1083 @@ fn create_items_from_paths(
         let _ = app.emit("orbit://refresh-resources", ());
     }
     Ok(created)
+}
+
+fn obsidian_vault_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ObsidianVaultConfig> {
+    let enabled: i64 = row.get(3)?;
+    let open_in_obsidian: i64 = row.get(7)?;
+    Ok(ObsidianVaultConfig {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        path: row.get(2)?,
+        enabled: enabled != 0,
+        last_indexed_at: row.get(4)?,
+        file_count: row.get::<_, i64>(5)? as u32,
+        task_count: row.get::<_, i64>(6)? as u32,
+        open_in_obsidian: open_in_obsidian != 0,
+        created_at: row.get(8)?,
+    })
+}
+
+fn get_obsidian_vault(conn: &Connection, id: &str) -> Result<Option<ObsidianVaultConfig>, String> {
+    conn.query_row(
+        r#"
+        SELECT id, name, path, enabled, last_indexed_at, file_count, task_count, open_in_obsidian, created_at
+        FROM obsidian_vaults
+        WHERE id = ?1
+        "#,
+        params![id],
+        obsidian_vault_from_row,
+    )
+    .optional()
+    .map_err(|error| format!("Failed to get Obsidian vault: {error}"))
+}
+
+fn all_obsidian_vaults(conn: &Connection) -> Result<Vec<ObsidianVaultConfig>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT id, name, path, enabled, last_indexed_at, file_count, task_count, open_in_obsidian, created_at
+            FROM obsidian_vaults
+            ORDER BY name COLLATE NOCASE ASC
+            "#,
+        )
+        .map_err(|error| format!("Failed to prepare Obsidian vault query: {error}"))?;
+    let rows = stmt
+        .query_map([], obsidian_vault_from_row)
+        .map_err(|error| format!("Failed to query Obsidian vaults: {error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to map Obsidian vaults: {error}"))
+}
+
+fn obsidian_note_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ObsidianNoteIndex> {
+    let tags_json: String = row.get(6)?;
+    let frontmatter_json: Option<String> = row.get(7)?;
+    let task_count: i64 = row.get(10)?;
+    let favorite: i64 = row.get(11)?;
+    Ok(ObsidianNoteIndex {
+        id: row.get(0)?,
+        vault_id: row.get(1)?,
+        vault_name: row.get(2)?,
+        title: row.get(3)?,
+        file_path: row.get(4)?,
+        relative_path: row.get(5)?,
+        tags: serde_json::from_str::<Vec<String>>(&tags_json).unwrap_or_default(),
+        frontmatter: frontmatter_json.and_then(|value| serde_json::from_str(&value).ok()),
+        modified_at: row.get(8)?,
+        indexed_at: row.get(9)?,
+        task_count: task_count.max(0) as u32,
+        favorite: favorite != 0,
+    })
+}
+
+fn obsidian_note_select_sql(where_clause: &str) -> String {
+    format!(
+        r#"
+        SELECT
+          n.id, n.vault_id, v.name, n.title, n.file_path, n.relative_path,
+          n.tags_json, n.frontmatter_json, n.modified_at, n.indexed_at,
+          COALESCE(task_counts.task_count, 0), n.favorite
+        FROM obsidian_notes n
+        JOIN obsidian_vaults v ON v.id = n.vault_id
+        LEFT JOIN (
+          SELECT note_id, COUNT(*) AS task_count
+          FROM obsidian_tasks
+          GROUP BY note_id
+        ) task_counts ON task_counts.note_id = n.id
+        {where_clause}
+        ORDER BY n.favorite DESC, n.modified_at DESC, n.title COLLATE NOCASE ASC
+        "#
+    )
+}
+
+fn query_obsidian_notes(
+    conn: &Connection,
+    vault_id: Option<&str>,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<ObsidianNoteIndex>, String> {
+    let vault_filter = vault_id.unwrap_or_default();
+    let sql = obsidian_note_select_sql("WHERE (?1 = '' OR n.vault_id = ?1)");
+    let mut stmt = conn
+        .prepare(&sql)
+        .map_err(|error| format!("Failed to prepare Obsidian note query: {error}"))?;
+    let rows = stmt
+        .query_map(params![vault_filter], obsidian_note_from_row)
+        .map_err(|error| format!("Failed to query Obsidian notes: {error}"))?;
+    let q = query.trim().to_lowercase();
+    let mut notes = Vec::new();
+    for row in rows {
+        let note = row.map_err(|error| format!("Failed to map Obsidian note: {error}"))?;
+        if !q.is_empty() {
+            let haystack = format!(
+                "{} {} {} {}",
+                note.title,
+                note.relative_path,
+                note.vault_name,
+                note.tags.join(" ")
+            )
+            .to_lowercase();
+            if !haystack.contains(&q) {
+                continue;
+            }
+        }
+        notes.push(note);
+        if limit > 0 && notes.len() >= limit {
+            break;
+        }
+    }
+    Ok(notes)
+}
+
+fn get_obsidian_note(
+    conn: &Connection,
+    note_id: &str,
+) -> Result<Option<ObsidianNoteIndex>, String> {
+    let sql = obsidian_note_select_sql("WHERE n.id = ?1");
+    conn.query_row(&sql, params![note_id], obsidian_note_from_row)
+        .optional()
+        .map_err(|error| format!("Failed to lookup Obsidian note: {error}"))
+}
+
+fn obsidian_task_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<ObsidianTask> {
+    let completed: i64 = row.get(10)?;
+    let tags_json: String = row.get(11)?;
+    Ok(ObsidianTask {
+        id: row.get(0)?,
+        vault_id: row.get(1)?,
+        vault_name: row.get(2)?,
+        note_id: row.get(3)?,
+        note_title: row.get(4)?,
+        file_path: row.get(5)?,
+        relative_path: row.get(6)?,
+        line_number: row.get(7)?,
+        raw_text: row.get(8)?,
+        text: row.get(9)?,
+        completed: completed != 0,
+        tags: serde_json::from_str::<Vec<String>>(&tags_json).unwrap_or_default(),
+        due_date: row.get(12)?,
+        priority: row.get(13)?,
+        completed_at: row.get(14)?,
+        modified_at: row.get(15)?,
+    })
+}
+
+fn query_obsidian_tasks(
+    conn: &Connection,
+    include_completed: bool,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<ObsidianTask>, String> {
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+              t.id, t.vault_id, v.name, t.note_id, n.title, t.file_path, t.relative_path,
+              t.line_number, t.raw_text, t.text, t.completed, t.tags_json, t.due_date,
+              t.priority, t.completed_at, t.modified_at
+            FROM obsidian_tasks t
+            JOIN obsidian_vaults v ON v.id = t.vault_id
+            LEFT JOIN obsidian_notes n ON n.id = t.note_id
+            WHERE (?1 = 1 OR t.completed = 0)
+            ORDER BY
+              CASE WHEN t.due_date IS NULL OR t.due_date = '' THEN 1 ELSE 0 END ASC,
+              t.due_date ASC,
+              CASE t.priority WHEN 'high' THEN 0 WHEN 'medium' THEN 1 WHEN 'low' THEN 2 ELSE 3 END ASC,
+              t.modified_at DESC
+            "#,
+        )
+        .map_err(|error| format!("Failed to prepare Obsidian task query: {error}"))?;
+    let rows = stmt
+        .query_map(
+            params![if include_completed { 1 } else { 0 }],
+            obsidian_task_from_row,
+        )
+        .map_err(|error| format!("Failed to query Obsidian tasks: {error}"))?;
+    let q = query.trim().to_lowercase();
+    let mut tasks = Vec::new();
+    for row in rows {
+        let task = row.map_err(|error| format!("Failed to map Obsidian task: {error}"))?;
+        if !q.is_empty() {
+            let haystack = format!(
+                "{} {} {} {} {}",
+                task.text,
+                task.note_title,
+                task.relative_path,
+                task.vault_name,
+                task.tags.join(" ")
+            )
+            .to_lowercase();
+            if !haystack.contains(&q) {
+                continue;
+            }
+        }
+        tasks.push(task);
+        if limit > 0 && tasks.len() >= limit {
+            break;
+        }
+    }
+    Ok(tasks)
+}
+
+fn normalize_obsidian_vault_path(path: &str) -> Result<PathBuf, String> {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return Err("Obsidian vault path cannot be empty".to_string());
+    }
+    let path = PathBuf::from(trimmed);
+    let canonical = path
+        .canonicalize()
+        .map_err(|error| format!("Failed to resolve Obsidian vault path: {error}"))?;
+    if !canonical.is_dir() {
+        return Err("Obsidian vault path is not a folder".to_string());
+    }
+    Ok(canonical)
+}
+
+fn vault_name_from_path(path: &Path) -> String {
+    path.file_name()
+        .and_then(|value| value.to_str())
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or("Obsidian Vault")
+        .chars()
+        .take(80)
+        .collect()
+}
+
+fn collect_markdown_files(root: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            let skip = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .map(|name| {
+                    matches!(
+                        name.to_ascii_lowercase().as_str(),
+                        "node_modules" | "target" | "dist" | "build" | ".git" | ".obsidian"
+                    )
+                })
+                .unwrap_or(false);
+            if !skip {
+                collect_markdown_files(&path, out);
+            }
+            continue;
+        }
+        if path
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("md"))
+            .unwrap_or(false)
+        {
+            out.push(path);
+        }
+    }
+}
+
+fn relative_path_for(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root)
+        .unwrap_or(file)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
+
+fn file_modified_at(path: &Path) -> String {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|duration| duration.as_secs().to_string())
+        .unwrap_or_else(now_string)
+}
+
+fn extract_markdown_title(content: &str, fallback: &Path) -> String {
+    for line in content.lines() {
+        if let Some(title) = line.trim_start().strip_prefix("# ") {
+            let title = title.trim();
+            if !title.is_empty() {
+                return title.chars().take(120).collect();
+            }
+        }
+    }
+    display_title_from_path(fallback)
+}
+
+fn extract_frontmatter(content: &str) -> Option<HashMap<String, String>> {
+    let mut lines = content.lines();
+    if lines.next()?.trim() != "---" {
+        return None;
+    }
+    let mut values = HashMap::new();
+    for line in lines {
+        let trimmed = line.trim();
+        if trimmed == "---" {
+            break;
+        }
+        if let Some((key, value)) = trimmed.split_once(':') {
+            let key = key.trim();
+            let value = value.trim().trim_matches('"').trim_matches('\'');
+            if !key.is_empty() && !value.is_empty() {
+                values.insert(key.to_string(), value.to_string());
+            }
+        }
+    }
+    if values.is_empty() {
+        None
+    } else {
+        Some(values)
+    }
+}
+
+fn is_tag_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_' || ch == '-' || ch == '/'
+}
+
+fn extract_tags(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut tags = Vec::new();
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '#' {
+            let before_ok = index == 0
+                || chars[index - 1].is_whitespace()
+                || matches!(chars[index - 1], '(' | '[' | '{');
+            let mut end = index + 1;
+            while end < chars.len() && is_tag_char(chars[end]) {
+                end += 1;
+            }
+            if before_ok && end > index + 1 {
+                tags.push(chars[index..end].iter().collect::<String>());
+                index = end;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    unique_strings(tags)
+}
+
+fn find_iso_date_after(text: &str, marker: &str) -> Option<String> {
+    let start = text.find(marker)? + marker.len();
+    for index in start..text.len().saturating_sub(9) {
+        let Some(slice) = text.get(index..index + 10) else {
+            continue;
+        };
+        if slice.chars().enumerate().all(|(i, ch)| {
+            if i == 4 || i == 7 {
+                ch == '-'
+            } else {
+                ch.is_ascii_digit()
+            }
+        }) {
+            return Some(slice.to_string());
+        }
+    }
+    None
+}
+
+fn extract_due_date(text: &str) -> Option<String> {
+    find_iso_date_after(text, "due::").or_else(|| find_iso_date_after(text, "📅"))
+}
+
+fn extract_completed_at(text: &str) -> Option<String> {
+    find_iso_date_after(text, "✅")
+}
+
+fn extract_priority(text: &str) -> Option<String> {
+    let lower = text.to_lowercase();
+    if text.contains("🔺") || lower.contains("priority:: high") {
+        Some("high".to_string())
+    } else if text.contains("🔼") || lower.contains("priority:: medium") {
+        Some("medium".to_string())
+    } else if text.contains("🔽") || lower.contains("priority:: low") {
+        Some("low".to_string())
+    } else {
+        None
+    }
+}
+
+fn clean_obsidian_task_text(text: &str) -> String {
+    let due = extract_due_date(text);
+    let completed = extract_completed_at(text);
+    let mut cleaned = text
+        .replace("🔺", "")
+        .replace("🔼", "")
+        .replace("🔽", "")
+        .replace("✅", "")
+        .replace("📅", "");
+    if let Some(date) = due {
+        cleaned = cleaned.replace(&date, "");
+    }
+    if let Some(date) = completed {
+        cleaned = cleaned.replace(&date, "");
+    }
+    cleaned
+        .split_whitespace()
+        .filter(|part| {
+            !part.starts_with('#') && !part.starts_with("due::") && !part.starts_with("priority::")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim()
+        .chars()
+        .take(500)
+        .collect()
+}
+
+fn parse_obsidian_task_line(line: &str) -> Option<(bool, String)> {
+    let trimmed = line.trim_start();
+    let indent = line.len().saturating_sub(trimmed.len());
+    if indent > 2 || trimmed.starts_with('>') {
+        return None;
+    }
+    let rest = trimmed
+        .strip_prefix("- [")
+        .or_else(|| trimmed.strip_prefix("* ["))
+        .or_else(|| trimmed.strip_prefix("-["))
+        .or_else(|| trimmed.strip_prefix("*["))?;
+    let mut chars = rest.chars();
+    let status = chars.next()?;
+    if chars.next()? != ']' {
+        return None;
+    }
+    let text = chars.as_str().trim();
+    if text.is_empty() {
+        return None;
+    }
+    if !matches!(status, ' ' | 'x' | 'X') {
+        return None;
+    }
+    Some((matches!(status, 'x' | 'X'), text.to_string()))
+}
+
+fn parse_obsidian_file(
+    vault: &ObsidianVaultConfig,
+    vault_root: &Path,
+    file: &Path,
+    indexed_at: &str,
+) -> Result<(ObsidianNoteIndex, Vec<ObsidianTask>), String> {
+    let content = fs::read_to_string(file)
+        .map_err(|error| format!("Failed to read Markdown file {}: {error}", file.display()))?;
+    let relative_path = relative_path_for(vault_root, file);
+    let file_path = file.to_string_lossy().to_string();
+    let modified_at = file_modified_at(file);
+    let title = extract_markdown_title(&content, file);
+    let tags = extract_tags(&content);
+    let frontmatter = extract_frontmatter(&content);
+    let note_id = make_id("obsnote", &format!("{}:{relative_path}", vault.id));
+    let mut tasks = Vec::new();
+    let mut in_code_block = false;
+
+    for (line_index, line) in content.lines().enumerate() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            in_code_block = !in_code_block;
+            continue;
+        }
+        if in_code_block {
+            continue;
+        }
+        let Some((completed, task_text)) = parse_obsidian_task_line(line) else {
+            continue;
+        };
+        let task_tags = unique_strings([tags.clone(), extract_tags(&task_text)].concat());
+        let line_number = (line_index + 1) as i64;
+        tasks.push(ObsidianTask {
+            id: make_id("obstask", &format!("{}:{line_number}:{task_text}", note_id)),
+            vault_id: vault.id.clone(),
+            vault_name: vault.name.clone(),
+            note_id: note_id.clone(),
+            note_title: title.clone(),
+            file_path: file_path.clone(),
+            relative_path: relative_path.clone(),
+            line_number,
+            raw_text: line.to_string(),
+            text: clean_obsidian_task_text(&task_text),
+            completed,
+            tags: task_tags,
+            due_date: extract_due_date(&task_text),
+            priority: extract_priority(&task_text),
+            completed_at: extract_completed_at(&task_text),
+            modified_at: modified_at.clone(),
+        });
+    }
+
+    Ok((
+        ObsidianNoteIndex {
+            id: note_id,
+            vault_id: vault.id.clone(),
+            vault_name: vault.name.clone(),
+            title,
+            file_path,
+            relative_path,
+            tags,
+            frontmatter,
+            modified_at,
+            indexed_at: indexed_at.to_string(),
+            task_count: tasks.len() as u32,
+            favorite: false,
+        },
+        tasks,
+    ))
+}
+
+fn insert_obsidian_note(conn: &Connection, note: &ObsidianNoteIndex) -> Result<(), String> {
+    conn.execute(
+        r#"
+        INSERT OR REPLACE INTO obsidian_notes
+          (id, vault_id, title, file_path, relative_path, tags_json, frontmatter_json, modified_at, indexed_at, favorite)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+        "#,
+        params![
+            note.id,
+            note.vault_id,
+            note.title,
+            note.file_path,
+            note.relative_path,
+            serde_json::to_string(&note.tags).unwrap_or_else(|_| "[]".to_string()),
+            note.frontmatter.as_ref().and_then(|value| serde_json::to_string(value).ok()),
+            note.modified_at,
+            note.indexed_at,
+            if note.favorite { 1 } else { 0 },
+        ],
+    )
+    .map_err(|error| format!("Failed to save Obsidian note index: {error}"))?;
+    Ok(())
+}
+
+fn insert_obsidian_task(conn: &Connection, task: &ObsidianTask) -> Result<(), String> {
+    conn.execute(
+        r#"
+        INSERT OR REPLACE INTO obsidian_tasks
+          (id, vault_id, note_id, file_path, relative_path, line_number, raw_text, text,
+           completed, tags_json, due_date, priority, completed_at, modified_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+        "#,
+        params![
+            task.id,
+            task.vault_id,
+            task.note_id,
+            task.file_path,
+            task.relative_path,
+            task.line_number,
+            task.raw_text,
+            task.text,
+            if task.completed { 1 } else { 0 },
+            serde_json::to_string(&task.tags).unwrap_or_else(|_| "[]".to_string()),
+            task.due_date,
+            task.priority,
+            task.completed_at,
+            task.modified_at,
+        ],
+    )
+    .map_err(|error| format!("Failed to save Obsidian task index: {error}"))?;
+    Ok(())
+}
+
+fn percent_encode_url_component(value: &str) -> String {
+    let mut encoded = String::new();
+    for byte in value.as_bytes() {
+        let ch = *byte as char;
+        if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '~') {
+            encoded.push(ch);
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
+}
+
+#[tauri::command]
+fn pick_obsidian_vault_path() -> Result<Option<String>, String> {
+    pick_folder_path()
+}
+
+#[tauri::command]
+fn list_obsidian_vaults() -> Result<Vec<ObsidianVaultConfig>, String> {
+    let conn = open_db()?;
+    all_obsidian_vaults(&conn)
+}
+
+#[tauri::command]
+fn add_obsidian_vault(
+    app: tauri::AppHandle,
+    path: String,
+    name: Option<String>,
+) -> Result<ObsidianVaultConfig, String> {
+    let conn = open_db()?;
+    let path = normalize_obsidian_vault_path(&path)?;
+    let path_text = path.to_string_lossy().to_string();
+    let title = name
+        .map(|value| value.trim().chars().take(80).collect::<String>())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| vault_name_from_path(&path));
+    let id = make_id("obsvault", &path_text.to_lowercase());
+    let now = now_string();
+    conn.execute(
+        r#"
+        INSERT INTO obsidian_vaults
+          (id, name, path, enabled, last_indexed_at, file_count, task_count, open_in_obsidian, created_at)
+        VALUES (?1, ?2, ?3, 1, NULL, 0, 0, 1, ?4)
+        ON CONFLICT(path) DO UPDATE SET
+          name = excluded.name,
+          enabled = 1
+        "#,
+        params![id, title, path_text, now],
+    )
+    .map_err(|error| format!("Failed to save Obsidian vault: {error}"))?;
+    let _ = app.emit("orbit://obsidian-changed", ());
+    get_obsidian_vault(&conn, &id)?.ok_or_else(|| "Obsidian vault not found after save".to_string())
+}
+
+#[tauri::command]
+fn remove_obsidian_vault(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute(
+        "DELETE FROM obsidian_tasks WHERE vault_id = ?1",
+        params![&id],
+    )
+    .map_err(|error| format!("Failed to delete Obsidian task index: {error}"))?;
+    conn.execute(
+        "DELETE FROM obsidian_notes WHERE vault_id = ?1",
+        params![&id],
+    )
+    .map_err(|error| format!("Failed to delete Obsidian note index: {error}"))?;
+    conn.execute("DELETE FROM obsidian_vaults WHERE id = ?1", params![id])
+        .map_err(|error| format!("Failed to delete Obsidian vault: {error}"))?;
+    let _ = app.emit("orbit://obsidian-changed", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn scan_obsidian_vault(
+    app: tauri::AppHandle,
+    vault_id: String,
+) -> Result<ObsidianScanResult, String> {
+    let conn = open_db()?;
+    let vault = get_obsidian_vault(&conn, &vault_id)?
+        .ok_or_else(|| "Obsidian vault not found".to_string())?;
+    let root = normalize_obsidian_vault_path(&vault.path)?;
+    let mut files = Vec::new();
+    collect_markdown_files(&root, &mut files);
+    let indexed_at = now_string();
+    let mut note_count = 0_u32;
+    let mut task_count = 0_u32;
+    let mut note_favorites = HashMap::new();
+    {
+        let mut stmt = conn
+            .prepare("SELECT relative_path, favorite FROM obsidian_notes WHERE vault_id = ?1")
+            .map_err(|error| format!("Failed to prepare Obsidian note state query: {error}"))?;
+        let rows = stmt
+            .query_map(params![&vault.id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? != 0))
+            })
+            .map_err(|error| format!("Failed to query Obsidian note state: {error}"))?;
+        for row in rows {
+            let (relative_path, favorite) =
+                row.map_err(|error| format!("Failed to map Obsidian note state: {error}"))?;
+            note_favorites.insert(relative_path, favorite);
+        }
+    }
+    conn.execute(
+        "DELETE FROM obsidian_tasks WHERE vault_id = ?1",
+        params![&vault.id],
+    )
+    .map_err(|error| format!("Failed to clear Obsidian task index: {error}"))?;
+    conn.execute(
+        "DELETE FROM obsidian_notes WHERE vault_id = ?1",
+        params![&vault.id],
+    )
+    .map_err(|error| format!("Failed to clear Obsidian note index: {error}"))?;
+    for file in files {
+        let Ok((mut note, tasks)) = parse_obsidian_file(&vault, &root, &file, &indexed_at) else {
+            continue;
+        };
+        note.favorite = note_favorites
+            .get(&note.relative_path)
+            .copied()
+            .unwrap_or(false);
+        insert_obsidian_note(&conn, &note)?;
+        note_count += 1;
+        for task in tasks {
+            insert_obsidian_task(&conn, &task)?;
+            task_count += 1;
+        }
+    }
+    conn.execute(
+        "UPDATE obsidian_vaults SET last_indexed_at = ?2, file_count = ?3, task_count = ?4 WHERE id = ?1",
+        params![&vault.id, indexed_at, note_count, task_count],
+    )
+    .map_err(|error| format!("Failed to update Obsidian vault scan metadata: {error}"))?;
+    let _ = app.emit("orbit://obsidian-changed", ());
+    let vault = get_obsidian_vault(&conn, &vault.id)?
+        .ok_or_else(|| "Obsidian vault not found after scan".to_string())?;
+    Ok(ObsidianScanResult {
+        vault,
+        note_count,
+        task_count,
+    })
+}
+
+#[tauri::command]
+fn list_obsidian_tasks(
+    include_completed: Option<bool>,
+    query: Option<String>,
+) -> Result<Vec<ObsidianTask>, String> {
+    let conn = open_db()?;
+    query_obsidian_tasks(
+        &conn,
+        include_completed.unwrap_or(false),
+        query.as_deref().unwrap_or_default(),
+        0,
+    )
+}
+
+#[tauri::command]
+fn list_obsidian_notes(
+    vault_id: Option<String>,
+    query: Option<String>,
+) -> Result<Vec<ObsidianNoteIndex>, String> {
+    let conn = open_db()?;
+    let vault_filter = vault_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty() && *value != "all");
+    query_obsidian_notes(&conn, vault_filter, query.as_deref().unwrap_or_default(), 0)
+}
+
+#[tauri::command]
+fn toggle_obsidian_note_favorite(
+    app: tauri::AppHandle,
+    id: String,
+    favorite: bool,
+) -> Result<(), String> {
+    let conn = open_db()?;
+    conn.execute(
+        "UPDATE obsidian_notes SET favorite = ?2 WHERE id = ?1",
+        params![id, if favorite { 1 } else { 0 }],
+    )
+    .map_err(|error| format!("Failed to update Obsidian note favorite: {error}"))?;
+    let _ = app.emit("orbit://obsidian-changed", ());
+    Ok(())
+}
+
+#[tauri::command]
+fn list_obsidian_note_tasks(note_id: String) -> Result<Vec<ObsidianTask>, String> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare(
+            r#"
+            SELECT
+              t.id, t.vault_id, v.name, t.note_id, n.title, t.file_path, t.relative_path,
+              t.line_number, t.raw_text, t.text, t.completed, t.tags_json, t.due_date,
+              t.priority, t.completed_at, t.modified_at
+            FROM obsidian_tasks t
+            JOIN obsidian_vaults v ON v.id = t.vault_id
+            LEFT JOIN obsidian_notes n ON n.id = t.note_id
+            WHERE t.note_id = ?1
+            ORDER BY t.line_number ASC
+            "#,
+        )
+        .map_err(|error| format!("Failed to prepare Obsidian note task query: {error}"))?;
+    let rows = stmt
+        .query_map(params![note_id], obsidian_task_from_row)
+        .map_err(|error| format!("Failed to query Obsidian note tasks: {error}"))?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to map Obsidian note tasks: {error}"))
+}
+
+#[tauri::command]
+fn toggle_obsidian_task_completion(app: tauri::AppHandle, task_id: String) -> Result<ObsidianTask, String> {
+    let conn = open_db()?;
+    let task = get_obsidian_task(&conn, &task_id)?.ok_or_else(|| "Obsidian task not found".to_string())?;
+    let new_completed = !task.completed;
+    let file_path = PathBuf::from(&task.file_path);
+
+    // Read file content
+    let content = std::fs::read_to_string(&file_path)
+        .map_err(|error| format!("Failed to read Obsidian note: {error}"))?;
+
+    // Modify the specific line's checkbox
+    let lines: Vec<&str> = content.lines().collect();
+    if task.line_number > 0 && (task.line_number as usize) <= lines.len() {
+        let line_idx = (task.line_number - 1) as usize;
+        let line = lines[line_idx];
+        let new_line = if new_completed {
+            // Mark as completed: - [ ] -> - [x] or - [ ] -> -[x]
+            line.replace("- [ ]", "- [x]").replace("-[ ]", "-[x]")
+        } else {
+            // Mark as incomplete: - [x] -> - [ ] or -[x] -> -[ ]
+            line.replace("- [x]", "- [ ]").replace("-[x]", "-[ ]")
+        };
+
+        if new_line != line {
+            let mut new_lines = lines.to_vec();
+            new_lines[line_idx] = &new_line;
+            let new_content = new_lines.join("\n");
+            std::fs::write(&file_path, &new_content)
+                .map_err(|error| format!("Failed to write Obsidian note: {error}"))?;
+        }
+    }
+
+    // Update database
+    let now = now_string();
+    conn.execute(
+        "UPDATE obsidian_tasks SET completed = ?2, completed_at = ?3, modified_at = ?4 WHERE id = ?1",
+        params![task_id, new_completed as i64, if new_completed { Some(now.clone()) } else { None }, now],
+    ).map_err(|error| format!("Failed to update task completion status: {error}"))?;
+
+    // Return updated task
+    let updated = get_obsidian_task(&conn, &task_id)?.ok_or_else(|| "Task not found after update".to_string())?;
+
+    // Emit change event
+    let _ = app.emit("orbit://obsidian-changed", ());
+
+    Ok(updated)
+}
+
+fn get_obsidian_task(conn: &Connection, id: &str) -> Result<Option<ObsidianTask>, String> {
+    conn.query_row(
+        r#"
+        SELECT
+          t.id, t.vault_id, v.name, t.note_id, n.title, t.file_path, t.relative_path,
+          t.line_number, t.raw_text, t.text, t.completed, t.tags_json, t.due_date,
+          t.priority, t.completed_at, t.modified_at
+        FROM obsidian_tasks t
+        JOIN obsidian_vaults v ON v.id = t.vault_id
+        LEFT JOIN obsidian_notes n ON n.id = t.note_id
+        WHERE t.id = ?1
+        "#,
+        params![id],
+        obsidian_task_from_row,
+    )
+    .optional()
+    .map_err(|error| format!("Failed to lookup Obsidian task: {error}"))
+}
+
+#[tauri::command]
+fn search_obsidian(query: String) -> Result<Vec<ObsidianSearchResult>, String> {
+    let conn = open_db()?;
+    let tasks = query_obsidian_tasks(&conn, false, &query, 25)?;
+    Ok(tasks
+        .into_iter()
+        .map(|task| ObsidianSearchResult {
+            kind: "task".to_string(),
+            id: task.id.clone(),
+            title: task.text.clone(),
+            subtitle: format!("{} · {}", task.vault_name, task.relative_path),
+            icon: "NotebookText".to_string(),
+            vault_id: task.vault_id.clone(),
+            vault_name: task.vault_name.clone(),
+            relative_path: task.relative_path.clone(),
+            line_number: Some(task.line_number),
+            task: Some(task),
+        })
+        .collect())
+}
+
+#[tauri::command]
+fn open_obsidian_note(
+    vault_id: String,
+    relative_path: String,
+    line_number: Option<i64>,
+) -> Result<String, String> {
+    let conn = open_db()?;
+    let vault = get_obsidian_vault(&conn, &vault_id)?
+        .ok_or_else(|| "Obsidian vault not found".to_string())?;
+    let relative_path = relative_path.trim().replace('\\', "/");
+    if relative_path.is_empty() {
+        return launch_target(vault.path);
+    }
+    if vault.open_in_obsidian {
+        let mut target = format!(
+            "obsidian://open?vault={}&file={}",
+            percent_encode_url_component(&vault.name),
+            percent_encode_url_component(&relative_path)
+        );
+        if let Some(line) = line_number.filter(|value| *value > 0) {
+            target.push_str("&line=");
+            target.push_str(&line.to_string());
+        }
+        launch_target(target)
+    } else {
+        launch_target(
+            PathBuf::from(vault.path)
+                .join(relative_path)
+                .to_string_lossy()
+                .to_string(),
+        )
+    }
+}
+
+#[cfg(desktop)]
+#[derive(Debug)]
+struct TodoDockState {
+    docked: bool,
+    suppress_next_move: bool,
+}
+
+#[cfg(desktop)]
+static TODO_DOCK_STATE: OnceLock<Mutex<TodoDockState>> = OnceLock::new();
+
+#[cfg(desktop)]
+fn todo_dock_state() -> &'static Mutex<TodoDockState> {
+    TODO_DOCK_STATE.get_or_init(|| {
+        Mutex::new(TodoDockState {
+            docked: true,
+            suppress_next_move: false,
+        })
+    })
+}
+
+#[cfg(desktop)]
+fn set_todo_panel_docked(docked: bool) {
+    if let Ok(mut state) = todo_dock_state().lock() {
+        state.docked = docked;
+        state.suppress_next_move = false;
+    }
+}
+
+#[cfg(desktop)]
+fn dock_todo_panel_to_main(app: &tauri::AppHandle, force_docked: bool) {
+    let should_dock = {
+        let Ok(mut state) = todo_dock_state().lock() else {
+            return;
+        };
+        if force_docked {
+            state.docked = true;
+        }
+        state.docked
+    };
+    if !should_dock {
+        return;
+    }
+
+    let Some(main_window) = app.get_webview_window("main") else {
+        return;
+    };
+    let Some(todo_window) = app.get_webview_window("todo-panel") else {
+        return;
+    };
+    let (Ok(main_position), Ok(main_size)) =
+        (main_window.outer_position(), main_window.outer_size())
+    else {
+        return;
+    };
+
+    let next_x = main_position.x + main_size.width as i32 + 8;
+    let next_y = main_position.y;
+    if let Ok(current_position) = todo_window.outer_position() {
+        if (current_position.x - next_x).abs() <= 1 && (current_position.y - next_y).abs() <= 1 {
+            return;
+        }
+    }
+
+    if let Ok(mut state) = todo_dock_state().lock() {
+        state.suppress_next_move = true;
+    }
+    let _ = todo_window.set_position(tauri::PhysicalPosition::new(next_x, next_y));
+}
+
+#[cfg(desktop)]
+fn handle_todo_window_dock(window: &tauri::Window, event: &WindowEvent) {
+    match window.label() {
+        "main" => match event {
+            WindowEvent::Moved(_) | WindowEvent::Resized(_) => {
+                dock_todo_panel_to_main(window.app_handle(), false);
+            }
+            _ => {}
+        },
+        "todo-panel" => match event {
+            WindowEvent::Moved(_) => {
+                if let Ok(mut state) = todo_dock_state().lock() {
+                    if state.suppress_next_move {
+                        state.suppress_next_move = false;
+                    } else {
+                        state.docked = false;
+                    }
+                }
+            }
+            WindowEvent::Destroyed | WindowEvent::CloseRequested { .. } => {
+                set_todo_panel_docked(false);
+            }
+            _ => {}
+        },
+        _ => {}
+    }
+}
+
+#[tauri::command]
+async fn open_obsidian_todo_window(app: tauri::AppHandle, note_id: String) -> Result<(), String> {
+    let conn = open_db()?;
+    let note =
+        get_obsidian_note(&conn, &note_id)?.ok_or_else(|| "Obsidian note not found".to_string())?;
+    let payload = serde_json::json!({
+        "noteId": note.id.clone(),
+        "vaultId": note.vault_id.clone(),
+        "vaultName": note.vault_name.clone(),
+        "relativePath": note.relative_path.clone(),
+        "title": note.title.clone()
+    });
+    if let Some(window) = app.get_webview_window("todo-panel") {
+        let _ = window.emit("orbit://todo-note", payload);
+        let _ = window.show();
+        let _ = window.unminimize();
+        #[cfg(desktop)]
+        dock_todo_panel_to_main(&app, true);
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let url = format!(
+        "index.html?panel=todo&noteId={}&vaultId={}&vaultName={}&relativePath={}&title={}",
+        percent_encode_url_component(&note.id),
+        percent_encode_url_component(&note.vault_id),
+        percent_encode_url_component(&note.vault_name),
+        percent_encode_url_component(&note.relative_path),
+        percent_encode_url_component(&note.title),
+    );
+    let mut builder = WebviewWindowBuilder::new(&app, "todo-panel", WebviewUrl::App(url.into()))
+        .title("OrbitStart - Todo")
+        .inner_size(520.0, 740.0)
+        .min_inner_size(400.0, 420.0)
+        .max_inner_size(640.0, 1600.0)
+        .decorations(false)
+        .resizable(true);
+    if let Some(main_window) = app.get_webview_window("main") {
+        let scale_factor = main_window.scale_factor().unwrap_or(1.0);
+        if let (Ok(position), Ok(size)) = (main_window.outer_position(), main_window.outer_size()) {
+            builder = builder.position(
+                (position.x as f64 + size.width as f64 + 8.0) / scale_factor,
+                position.y as f64 / scale_factor,
+            );
+        } else {
+            builder = builder.center();
+        }
+    } else {
+        builder = builder.center();
+    }
+    builder
+        .build()
+        .map_err(|error| format!("Failed to open todo window: {error}"))?;
+    #[cfg(desktop)]
+    {
+        set_todo_panel_docked(true);
+        dock_todo_panel_to_main(&app, true);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_todo_window_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("todo-panel")
+        .ok_or_else(|| "Todo window is not open".to_string())?;
+    window
+        .set_always_on_top(enabled)
+        .map_err(|error| format!("Failed to update todo window pin state: {error}"))
 }
 
 #[tauri::command]
@@ -2593,6 +3908,25 @@ fn create_group(app: tauri::AppHandle, title: String) -> Result<Vec<OrbitGroup>,
         params![id, title, format!("自定义标签：{title}"), now_string()],
     )
     .map_err(|error| format!("Failed to create group: {error}"))?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    all_groups(&conn)
+}
+
+#[tauri::command]
+fn delete_group(app: tauri::AppHandle, id: String) -> Result<Vec<OrbitGroup>, String> {
+    let conn = open_db()?;
+    // Only custom groups can be deleted.
+    let custom: i64 = conn
+        .query_row("SELECT custom FROM groups WHERE id = ?1", params![&id], |row| row.get(0))
+        .map_err(|error| format!("Failed to check group: {error}"))?;
+    if custom == 0 {
+        return Err("默认分组不可删除".to_string());
+    }
+    // Migrate items in this group to "all" before deleting.
+    conn.execute("UPDATE items SET group_id = 'all', updated_at = ?2 WHERE group_id = ?1", params![&id, now_string()])
+        .map_err(|error| format!("Failed to migrate items: {error}"))?;
+    conn.execute("DELETE FROM groups WHERE id = ?1", params![&id])
+        .map_err(|error| format!("Failed to delete group: {error}"))?;
     let _ = app.emit("orbit://refresh-resources", ());
     all_groups(&conn)
 }
@@ -2656,7 +3990,7 @@ fn delete_item(app: tauri::AppHandle, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn launch_item(id: String) -> Result<String, String> {
+fn launch_item(app: tauri::AppHandle, id: String) -> Result<String, String> {
     let conn = open_db()?;
     let item = get_item(&conn, &id)?.ok_or_else(|| "Item not found".to_string())?;
     if item.kind == "action_chain" {
@@ -2665,11 +3999,21 @@ fn launch_item(id: String) -> Result<String, String> {
         launch_target(item.target.clone())?;
     }
     let now = now_string();
-    conn.execute(
-        "UPDATE items SET launch_count = launch_count + 1, last_launched_at = ?2, updated_at = ?2 WHERE id = ?1",
-        params![id, now],
-    )
-    .map_err(|error| format!("Failed to update launch count: {error}"))?;
+    let settings = app_settings(&conn)?;
+    if settings.auto_pinned_mode {
+        conn.execute(
+            "UPDATE items SET launch_count = launch_count + 1, last_launched_at = ?2, updated_at = ?2, sort_order = (SELECT COALESCE(MIN(sort_order), 0) - 1 FROM items) WHERE id = ?1",
+            params![id, now],
+        )
+        .map_err(|error| format!("Failed to update launch count and sort order: {error}"))?;
+        let _ = app.emit("orbit://refresh-resources", ());
+    } else {
+        conn.execute(
+            "UPDATE items SET launch_count = launch_count + 1, last_launched_at = ?2, updated_at = ?2 WHERE id = ?1",
+            params![id, now],
+        )
+        .map_err(|error| format!("Failed to update launch count: {error}"))?;
+    }
     Ok(format!("已启动：{}", item.title))
 }
 
@@ -3189,6 +4533,14 @@ fn set_safe_mode(app: tauri::AppHandle, enabled: bool) -> Result<CatalogSnapshot
 }
 
 #[tauri::command]
+fn set_auto_pinned_mode(app: tauri::AppHandle, enabled: bool) -> Result<CatalogSnapshot, String> {
+    let conn = open_db()?;
+    set_setting_value(&conn, "auto_pinned_mode", if enabled { "true" } else { "false" })?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    catalog_snapshot()
+}
+
+#[tauri::command]
 fn export_catalog_json() -> Result<ExportResult, String> {
     let conn = open_db()?;
     let export = CatalogExport {
@@ -3271,8 +4623,11 @@ fn ensure_local_templates() -> Result<(), String> {
             .map_err(|error| format!("Failed to create hello plugin: {error}"))?;
         fs::write(plugin_root.join("plugin.json"), hello_plugin_manifest())
             .map_err(|error| format!("Failed to write hello plugin manifest: {error}"))?;
-        fs::write(plugin_root.join("main.ts"), hello_plugin_source_for("hello-command"))
-            .map_err(|error| format!("Failed to write hello plugin source: {error}"))?;
+        fs::write(
+            plugin_root.join("main.ts"),
+            hello_plugin_source_for("hello-command"),
+        )
+        .map_err(|error| format!("Failed to write hello plugin source: {error}"))?;
         fs::write(
             plugin_root.join("orbitstart-plugin-api.d.ts"),
             hello_plugin_api_types(),
@@ -3286,8 +4641,11 @@ fn ensure_local_templates() -> Result<(), String> {
     if !trips_plugin_root.exists() {
         fs::create_dir_all(&trips_plugin_root)
             .map_err(|error| format!("Failed to create trips plugin: {error}"))?;
-        fs::write(trips_plugin_root.join("plugin.json"), trips_plugin_manifest())
-            .map_err(|error| format!("Failed to write trips plugin manifest: {error}"))?;
+        fs::write(
+            trips_plugin_root.join("plugin.json"),
+            trips_plugin_manifest(),
+        )
+        .map_err(|error| format!("Failed to write trips plugin manifest: {error}"))?;
         fs::write(trips_plugin_root.join("main.ts"), trips_plugin_source())
             .map_err(|error| format!("Failed to write trips plugin source: {error}"))?;
         fs::write(
@@ -3297,6 +4655,32 @@ fn ensure_local_templates() -> Result<(), String> {
         .map_err(|error| format!("Failed to write trips plugin API types: {error}"))?;
         fs::write(trips_plugin_root.join("README.md"), trips_plugin_readme())
             .map_err(|error| format!("Failed to write trips plugin README: {error}"))?;
+    }
+
+    let obsidian_plugin_root = plugins_dir()?.join("obsidian-search");
+    if !obsidian_plugin_root.exists() {
+        fs::create_dir_all(&obsidian_plugin_root)
+            .map_err(|error| format!("Failed to create obsidian plugin: {error}"))?;
+        fs::write(
+            obsidian_plugin_root.join("plugin.json"),
+            obsidian_plugin_manifest(),
+        )
+        .map_err(|error| format!("Failed to write obsidian plugin manifest: {error}"))?;
+        fs::write(
+            obsidian_plugin_root.join("main.ts"),
+            obsidian_plugin_source(),
+        )
+        .map_err(|error| format!("Failed to write obsidian plugin source: {error}"))?;
+        fs::write(
+            obsidian_plugin_root.join("orbitstart-plugin-api.d.ts"),
+            obsidian_plugin_api_types(),
+        )
+        .map_err(|error| format!("Failed to write obsidian plugin API types: {error}"))?;
+        fs::write(
+            obsidian_plugin_root.join("README.md"),
+            obsidian_plugin_readme(),
+        )
+        .map_err(|error| format!("Failed to write obsidian plugin README: {error}"))?;
     }
 
     let theme_root = themes_dir()?.join("aurora-focus");
@@ -3382,6 +4766,128 @@ const plugin: OrbitPlugin = {
 };
 
 export default plugin;
+"#
+}
+
+fn obsidian_plugin_manifest() -> &'static str {
+    r#"{
+  "id": "obsidian-search",
+  "name": "Obsidian Search",
+  "version": "0.1.0",
+  "description": "Search local Obsidian task indexes and open source notes through OrbitStart.",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "ui:toast", "label": "Show toast messages", "risk": "low" },
+    { "id": "obsidian:read", "label": "Search and open indexed Obsidian tasks", "risk": "medium" }
+  ],
+  "contributes": { "commands": 1, "searchProviders": 1, "themes": 0, "views": 0 }
+}
+"#
+}
+
+fn obsidian_plugin_source() -> &'static str {
+    r#"import type { OrbitPlugin } from "./orbitstart-plugin-api";
+
+const plugin: OrbitPlugin = {
+  activate(ctx) {
+    ctx.commands.registerCommand({
+      id: "open",
+      title: "Open Obsidian todos",
+      subtitle: "Open the local read-only Obsidian note index.",
+      icon: "NotebookText",
+      keywords: ["obsidian", "todo", "task", "notes"],
+      run: async () => {
+        await ctx.obsidian.open("", "");
+        ctx.ui.toast("Opened Obsidian todo index");
+      }
+    });
+
+    ctx.search.registerProvider("tasks", async (query) => {
+      const q = query.trim();
+      if (q.length < 2) return [];
+      const results = await ctx.obsidian.search(q);
+      return results.map((result) => ({
+        id: `obsidian-search.${result.id}`,
+        title: `[Obsidian] ${result.title}`,
+        subtitle: result.subtitle,
+        icon: "NotebookText",
+        source: "obsidian-search",
+        actionLabel: "Open note",
+        run: () => ctx.obsidian.open(result.vaultId, result.relativePath, result.lineNumber ?? undefined)
+      }));
+    });
+  }
+};
+
+export default plugin;
+"#
+}
+
+fn obsidian_plugin_api_types() -> &'static str {
+    r#"export interface OrbitPlugin {
+  activate(ctx: OrbitPluginContext): void | Promise<void>;
+}
+
+export interface OrbitPluginContext {
+  commands: { registerCommand(command: OrbitCommandContribution): void };
+  search: { registerProvider(id: string, provider: (query: string) => Promise<SearchResult[]> | SearchResult[]): void };
+  ui: { toast(message: string): void };
+  obsidian: ObsidianApi;
+}
+
+export interface OrbitCommandContribution {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  keywords?: string[];
+  run(): void | Promise<void>;
+}
+
+export interface SearchResult {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  source: string;
+  actionLabel: string;
+  run(): void | Promise<void>;
+}
+
+export interface ObsidianApi {
+  search(query: string): Promise<ObsidianSearchResult[]>;
+  open(vaultId: string, relativePath: string, lineNumber?: number): Promise<void>;
+}
+
+export interface ObsidianTask {
+  id: string;
+  vaultId: string;
+  vaultName: string;
+  noteId: string;
+  noteTitle: string;
+  filePath: string;
+  relativePath: string;
+  lineNumber: number;
+  text: string;
+  completed: boolean;
+  tags: string[];
+  dueDate?: string | null;
+  priority?: "low" | "medium" | "high" | null;
+}
+
+export interface ObsidianSearchResult {
+  kind: string;
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  vaultId: string;
+  vaultName: string;
+  relativePath: string;
+  lineNumber?: number | null;
+  task?: ObsidianTask | null;
+}
 "#
 }
 
@@ -3537,6 +5043,16 @@ Adds command-palette search for Trip notes attached to OrbitStart resources.
 "#
 }
 
+fn obsidian_plugin_readme() -> &'static str {
+    r#"# Obsidian Search
+
+Official local OrbitStart plugin for searching the read-only Obsidian task index.
+
+- `ctx.obsidian.search(query)` searches indexed checkbox tasks.
+- `ctx.obsidian.open(vaultId, relativePath, lineNumber)` opens the source note.
+"#
+}
+
 fn sample_theme_manifest() -> &'static str {
     r##"{
   "id": "aurora-focus",
@@ -3615,8 +5131,11 @@ fn create_plugin_template(name: String) -> Result<String, String> {
         .map_err(|error| format!("Failed to write plugin manifest: {error}"))?;
     fs::write(path.join("main.ts"), hello_plugin_source_for(&slug))
         .map_err(|error| format!("Failed to write plugin source: {error}"))?;
-    fs::write(path.join("orbitstart-plugin-api.d.ts"), hello_plugin_api_types())
-        .map_err(|error| format!("Failed to write plugin API types: {error}"))?;
+    fs::write(
+        path.join("orbitstart-plugin-api.d.ts"),
+        hello_plugin_api_types(),
+    )
+    .map_err(|error| format!("Failed to write plugin API types: {error}"))?;
     fs::write(path.join("README.md"), hello_plugin_readme())
         .map_err(|error| format!("Failed to write plugin README: {error}"))?;
 
@@ -3863,10 +5382,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             catalog_snapshot,
             create_item,
+            reorder_items,
             create_items_from_paths,
             pick_resource_input,
             pick_icon_image,
             create_group,
+            delete_group,
             list_trips,
             create_trip,
             update_trip,
@@ -3874,6 +5395,20 @@ pub fn run() {
             delete_trip,
             search_trips,
             trip_count_for_items,
+            pick_obsidian_vault_path,
+            list_obsidian_vaults,
+            add_obsidian_vault,
+            remove_obsidian_vault,
+            scan_obsidian_vault,
+            list_obsidian_tasks,
+            list_obsidian_notes,
+            toggle_obsidian_note_favorite,
+            list_obsidian_note_tasks,
+            search_obsidian,
+            open_obsidian_note,
+            open_obsidian_todo_window,
+            set_todo_window_always_on_top,
+            toggle_obsidian_task_completion,
             update_item,
             delete_item,
             launch_item,
@@ -3889,6 +5424,7 @@ pub fn run() {
             set_density,
             set_close_behavior,
             set_safe_mode,
+            set_auto_pinned_mode,
             read_plugin_runtime,
             record_plugin_runtime_event,
             export_catalog_json,
@@ -3910,6 +5446,8 @@ pub fn run() {
         .on_window_event(|window, event| {
             #[cfg(desktop)]
             handle_main_window_close(window, event);
+            #[cfg(desktop)]
+            handle_todo_window_dock(window, event);
         })
         .on_menu_event(|app, event| {
             if event.id() == "quit" {

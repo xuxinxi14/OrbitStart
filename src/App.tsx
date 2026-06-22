@@ -28,6 +28,8 @@ import {
   Palette,
   PanelsTopLeft,
   Pencil,
+  Pin,
+  PinOff,
   PlusCircle,
   Power,
   Puzzle,
@@ -48,6 +50,9 @@ import {
 } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { LocalGalaxyBackdrop } from "./components/LocalGalaxyBackdrop";
 import { TripPanel } from "./components/TripPanel";
 import {
@@ -70,42 +75,61 @@ import {
 } from "./lib/onboarding";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import {
+  addObsidianVault,
   createItem,
   createItemsFromPaths,
   createGroup,
+  deleteGroup,
   createPluginTemplate,
   deleteItem,
   exportCatalogJson,
   importCatalogJson,
+  listObsidianNoteTasks,
+  listObsidianNotes,
+  listObsidianTasks,
+  listObsidianVaults,
   loadSnapshot,
+  openObsidianNote,
+  openObsidianTodoWindow,
   openAuxWindow,
   openDataDirectory,
   pickIconImage,
+  pickObsidianVaultPath,
   pickResourceInput,
   revealTarget,
+  removeObsidianVault,
   scanBrowserBookmarks,
+  scanObsidianVault,
   scanShortcuts,
   updateGlobalHotkey,
   previewScanShortcuts,
   previewScanBrowserBookmarks,
   importScannedItems,
   searchTrips,
-  tripCountForItems,
+  setTodoWindowAlwaysOnTop,
+  toggleObsidianTaskCompletion,
   setActiveTheme,
   setCloseBehavior,
   setDensity,
   setPluginEnabled,
   setSafeMode,
+  setAutoPinnedMode,
+  toggleObsidianNoteFavorite,
+  tripCountForItems,
   updateItem,
   launchItem,
   getAutostartEnabled,
-  setAutostartEnabled
+  setAutostartEnabled,
+  reorderItems
 } from "./lib/native";
 import { createOrbitPluginHost } from "./plugin/api";
 import { localGalaxyAssets } from "./theme/localGalaxyAssets";
 import type {
   AppSettings,
   ItemKind,
+  ObsidianNoteIndex,
+  ObsidianTask,
+  ObsidianVaultConfig,
   OrbitCommand,
   OrbitGroup,
   OrbitItem,
@@ -126,9 +150,21 @@ const tripStatusLabels: Record<string, string> = {
   "needs-update": "需更新"
 };
 
-type ViewId = "dashboard" | "trips" | "settings" | "logs";
-type SettingsSection = "general" | "plugins" | "themes" | "dev" | "data" | "about";
+type ViewId = "dashboard" | "trips" | "obsidian" | "settings" | "logs";
+type SettingsSection = "general" | "plugins" | "themes" | "obsidian" | "dev" | "data" | "about";
 type AuxPanel = "settings" | "plugins" | "themes" | "about";
+type TodoPanelPayload = {
+  noteId: string;
+  vaultId?: string;
+  vaultName?: string;
+  relativePath?: string;
+  title?: string;
+};
+type ImportFilterCode = "uninstall" | "help" | "developer" | "system" | "auxiliary" | "duplicate";
+type ImportFilterReason = {
+  code: ImportFilterCode;
+  label: string;
+};
 type AppDialogState =
   | { type: "group"; value: string }
   | { type: "delete-item"; item: OrbitItem }
@@ -139,7 +175,7 @@ type AppDialogState =
 function getInitialView(): ViewId {
   if (typeof window === "undefined") return "dashboard";
   const requestedView = new URLSearchParams(window.location.search).get("view") ?? window.location.hash.replace("#", "");
-  return requestedView === "settings" || requestedView === "logs" || requestedView === "trips" ? requestedView : "dashboard";
+  return requestedView === "settings" || requestedView === "logs" || requestedView === "trips" || requestedView === "obsidian" ? requestedView : "dashboard";
 }
 
 function getAuxPanel(): AuxPanel | null {
@@ -150,9 +186,119 @@ function getAuxPanel(): AuxPanel | null {
   return label === "settings" || label === "plugins" || label === "themes" || label === "about" ? label : null;
 }
 
+function getTodoPanelPayload(): TodoPanelPayload | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const panel = params.get("panel");
+  const label = getAppWindow()?.label;
+  if (panel !== "todo" && label !== "todo-panel") return null;
+  return {
+    noteId: params.get("noteId") ?? "",
+    vaultId: params.get("vaultId") ?? undefined,
+    vaultName: params.get("vaultName") ?? undefined,
+    relativePath: params.get("relativePath") ?? undefined,
+    title: params.get("title") ?? undefined
+  };
+}
+
 function sectionFromPanel(panel: AuxPanel | null): SettingsSection {
   if (panel === "plugins" || panel === "themes" || panel === "about") return panel;
   return "general";
+}
+
+const importFilterLabels: Record<ImportFilterCode, string> = {
+  uninstall: "卸载/安装维护",
+  help: "帮助/文档",
+  developer: "开发/终端工具",
+  system: "系统管理工具",
+  auxiliary: "辅助组件",
+  duplicate: "重复入口"
+};
+
+const importFilterRules: Array<{ code: Exclude<ImportFilterCode, "duplicate">; pattern: RegExp }> = [
+  {
+    code: "uninstall",
+    pattern: /\b(uninstall|uninstaller|unins\d*|remove|cleanup|repair|installer|installshield|setup wizard|modify installation)\b|卸载|安装维护|修复/
+  },
+  {
+    code: "help",
+    pattern: /\b(help|documentation|manual|readme|guide|tutorial|examples?|sample|samples|docs?|user guide|getting started|release notes|what'?s new|license|licence|changelog)\b|帮助|文档|说明|示例|手册|教程/
+  },
+  {
+    code: "developer",
+    pattern: /\b(developer|debug|debuggable|sdk|compiler|command prompt|powershell|terminal|console|shell|cmd|visual studio.*tools|native tools|package manager|nuget|git bash|node\.js command prompt|x64 native|x86 native|cross tools)\b|开发者|调试|编译器|命令提示符|终端/
+  },
+  {
+    code: "system",
+    pattern: /\b(disk defragmenter|defragment|dfrgui|event viewer|services|registry editor|regedit|odbc|component services|computer management|device manager|task scheduler|windows tools|system information|performance monitor|resource monitor|print management|memory diagnostic|recovery drive)\b|磁盘碎片整理|事件查看器|注册表|任务计划|设备管理/
+  },
+  {
+    code: "auxiliary",
+    pattern: /\b(database compare|spreadsheet compare|compare|telemetry|diagnostics?|feedback|support|configuration|configurator|configure|updater?|activation|license manager|language selector|import and export settings)\b|比较|诊断|反馈|支持|配置工具|更新程序|许可证/
+  }
+];
+
+function normalizeImportText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/["']/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function importSearchText(item: OrbitItemInput): string {
+  return normalizeImportText([item.title, item.subtitle, item.target, ...item.aliases].join(" "));
+}
+
+function importDuplicateKey(item: OrbitItemInput): string {
+  return normalizeImportText(`${item.title}|${item.subtitle || item.target}`);
+}
+
+function shortcutWrapperLooksLowValue(text: string): ImportFilterCode | null {
+  if (/(^|[\\/\s])(cmd|powershell|pwsh|wscript|cscript)\.exe\b/.test(text)) return "developer";
+  if (/(^|[\\/\s])(appvlp|dfrgui|mmc|control|rundll32|regedit|eventvwr|services)\.exe\b/.test(text)) return "system";
+  if (/\.(chm|hlp|pdf|txt|rtf)(\s|$)/.test(text)) return "help";
+  return null;
+}
+
+function shortcutImportFilterReason(item: OrbitItemInput): ImportFilterReason | null {
+  const text = importSearchText(item);
+  const wrapperCode = shortcutWrapperLooksLowValue(text);
+  if (wrapperCode) return { code: wrapperCode, label: importFilterLabels[wrapperCode] };
+
+  for (const rule of importFilterRules) {
+    if (rule.pattern.test(text)) {
+      return { code: rule.code, label: importFilterLabels[rule.code] };
+    }
+  }
+
+  return null;
+}
+
+function buildImportFilterReasons(kind: "shortcuts" | "bookmarks", items: OrbitItemInput[]): Map<number, ImportFilterReason> {
+  const reasons = new Map<number, ImportFilterReason>();
+  if (kind !== "shortcuts") return reasons;
+
+  const seen = new Set<string>();
+  items.forEach((item, index) => {
+    const key = importDuplicateKey(item);
+    const baseReason = shortcutImportFilterReason(item);
+    const duplicateReason = key && seen.has(key) ? { code: "duplicate" as const, label: importFilterLabels.duplicate } : null;
+    const reason = baseReason ?? duplicateReason;
+    if (key) seen.add(key);
+    if (reason) reasons.set(index, reason);
+  });
+
+  return reasons;
+}
+
+function buildDefaultImportSelection(kind: "shortcuts" | "bookmarks", items: OrbitItemInput[]): Set<number> {
+  const filteredReasons = buildImportFilterReasons(kind, items);
+  const selected = new Set<number>();
+  items.forEach((_, index) => {
+    if (!filteredReasons.has(index)) selected.add(index);
+  });
+  return selected;
 }
 
 const iconMap = {
@@ -352,10 +498,148 @@ function pluginDetail(plugin: OrbitPluginManifest) {
   };
 }
 
+function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
+  let timeout: number | null = null;
+  return (...args: Parameters<T>) => {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = window.setTimeout(() => {
+      func(...args);
+    }, wait);
+  };
+}
+
+interface SortableResourceRowProps {
+  item: OrbitItem;
+  selectedIds: string[];
+  batchMode: boolean;
+  busy: boolean;
+  toggleSelected: (id: string) => void;
+  openItem: (item: OrbitItem) => void;
+  groups: OrbitGroup[];
+  tripCounts: Record<string, number>;
+  setTripPanelItem: (item: OrbitItem | null) => void;
+  setTripPanelHighlightId: (id: string | null) => void;
+  toggleFavorite: (item: OrbitItem) => void;
+  setEditor: (editor: any) => void;
+  removeItem: (item: OrbitItem) => void;
+  resourceIconStyle: (item: OrbitItem) => React.CSSProperties;
+}
+
+function SortableResourceRow({
+  item,
+  selectedIds,
+  batchMode,
+  busy,
+  toggleSelected,
+  openItem,
+  groups,
+  tripCounts,
+  setTripPanelItem,
+  setTripPanelHighlightId,
+  toggleFavorite,
+  setEditor,
+  removeItem,
+  resourceIconStyle
+}: SortableResourceRowProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+    disabled: batchMode,
+  });
+
+  const style = {
+    transform: transform
+      ? `${CSS.Transform.toString(transform)} ${isDragging ? "scale(1.04)" : ""}`
+      : isDragging
+      ? "scale(1.04)"
+      : undefined,
+    transition,
+    opacity: isDragging ? 0.35 : undefined,
+    zIndex: isDragging ? 100 : undefined,
+  };
+
+  return (
+    <article
+      ref={setNodeRef}
+      style={style}
+      className={`resource-row ${selectedIds.includes(item.id) ? "selected" : ""} ${isDragging ? "dragging" : ""}`}
+      data-resource-id={item.id}
+      {...attributes}
+      {...listeners}
+    >
+      {batchMode && (
+        <label className="tile-check" onPointerDown={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
+        </label>
+      )}
+      <button
+        type="button"
+        className="resource-launch"
+        onClick={() => (batchMode ? toggleSelected(item.id) : openItem(item))}
+        disabled={busy}
+      >
+        <span
+          className="resource-icon"
+          style={resourceIconStyle(item)}
+        >
+          <Icon name={item.icon} size={26} />
+        </span>
+        <span className="resource-copy">
+          <strong>{item.title}</strong>
+          <small>{item.subtitle || item.target}</small>
+          <span className="resource-group-tags" aria-label="资源标签">
+            {groupLabelsForItem(item, groups).map((group) => (
+              <em key={group.id}>{group.title}</em>
+            ))}
+          </span>
+        </span>
+        <span className="resource-meta-column">
+          <em>{item.launchCount} 次启动</em>
+          <small>{lastLaunchedText(item)}</small>
+        </span>
+      </button>
+      {!batchMode && (
+        <div className="tile-actions" onPointerDown={(e) => e.stopPropagation()}>
+          <button
+            className={`trip-action ${tripCounts[item.id] ? "has-trips" : ""}`}
+            title="Trips"
+            onClick={() => {
+              setTripPanelItem(item);
+              setTripPanelHighlightId(null);
+            }}
+            disabled={busy}
+          >
+            <Lightbulb size={15} />
+            {tripCounts[item.id] > 0 && <span className="trip-badge">{tripCounts[item.id]}</span>}
+          </button>
+          <button
+            className={`favorite-action ${item.favorite ? "is-favorite" : ""}`}
+            title="星标"
+            onClick={() => toggleFavorite(item)}
+            disabled={busy}
+          >
+            {item.favorite ? <img src={localGalaxyAssets.icons.favoriteStar20.src} alt="" /> : <Star size={15} />}
+          </button>
+          <button title="编辑" onClick={() => setEditor({ mode: "edit", item, input: inputFromItem(item) })}>
+            <Pencil size={15} />
+          </button>
+          <button title="删除" onClick={() => removeItem(item)} disabled={busy}>
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function App() {
   const auxPanel = useMemo(getAuxPanel, []);
   const isAuxWindow = Boolean(auxPanel);
+  const initialTodoPanelPayload = useMemo(getTodoPanelPayload, []);
+  const isTodoPanelWindow = Boolean(initialTodoPanelPayload);
   const [items, setItems] = useState<OrbitItem[]>([]);
+  const [localOrder, setLocalOrder] = useState<string[]>([]);
   const [groups, setGroups] = useState<OrbitGroup[]>([]);
   const [commands, setCommands] = useState<OrbitCommand[]>([]);
   const [plugins, setPlugins] = useState<OrbitPluginManifest[]>([]);
@@ -393,6 +677,16 @@ export default function App() {
   const [tripPanelHighlightId, setTripPanelHighlightId] = useState<string | null>(null);
   const [tripsQuery, setTripsQuery] = useState("");
   const [tripSearchResults, setTripSearchResults] = useState<TripSearchResult[]>([]);
+  const [obsidianVaults, setObsidianVaults] = useState<ObsidianVaultConfig[]>([]);
+  const [obsidianTasks, setObsidianTasks] = useState<ObsidianTask[]>([]);
+  const [obsidianNotes, setObsidianNotes] = useState<ObsidianNoteIndex[]>([]);
+  const [activeObsidianVault, setActiveObsidianVault] = useState("all");
+  const [obsidianQuery, setObsidianQuery] = useState("");
+  const [obsidianScanningId, setObsidianScanningId] = useState<string | null>(null);
+  const [todoPanelPayload, setTodoPanelPayload] = useState<TodoPanelPayload>(initialTodoPanelPayload ?? { noteId: "" });
+  const [todoPanelTasks, setTodoPanelTasks] = useState<ObsidianTask[]>([]);
+  const [todoPanelPinned, setTodoPanelPinned] = useState(false);
+  const [todoPanelLoading, setTodoPanelLoading] = useState(false);
   const hotkeyInputRef = useRef<HTMLInputElement>(null);
 
   const [importPreview, setImportPreview] = useState<{
@@ -415,6 +709,58 @@ export default function App() {
       void getAutostartEnabled().then(setAutostartEnabled);
     }
   }, []);
+
+  useEffect(() => {
+    if (isTodoPanelWindow) {
+      document.body.classList.add("todo-body");
+    } else {
+      document.body.classList.remove("todo-body");
+    }
+  }, [isTodoPanelWindow]);
+
+  useEffect(() => {
+    if (isAuxWindow) {
+      document.body.classList.add("aux-body");
+    } else {
+      document.body.classList.remove("aux-body");
+    }
+  }, [isAuxWindow]);
+
+  useEffect(() => {
+    setLocalOrder(items.map((item) => item.id));
+  }, [items]);
+
+  const debouncedReorder = useMemo(
+    () =>
+      debounce(async (orderedIds: string[]) => {
+        try {
+          await reorderItems(orderedIds);
+        } catch (error) {
+          console.error("Failed to persist reorder:", error);
+        }
+      }, 300),
+    []
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { delay: 300, tolerance: 5 },
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setLocalOrder((prev) => {
+      const oldIndex = prev.indexOf(active.id as string);
+      const newIndex = prev.indexOf(over.id as string);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const next = arrayMove(prev, oldIndex, newIndex);
+      void debouncedReorder(next);
+      return next;
+    });
+  };
 
   function applySnapshot(snapshot: Awaited<ReturnType<typeof loadSnapshot>>) {
     setItems(snapshot.items);
@@ -450,6 +796,21 @@ export default function App() {
     await refreshTripSearch();
   }
 
+  async function refreshObsidian(queryText = obsidianQuery, vaultId = activeObsidianVault) {
+    const [vaultList, taskList, noteList] = await Promise.all([
+      listObsidianVaults(),
+      listObsidianTasks({ includeCompleted: false, query: queryText }),
+      listObsidianNotes({ vaultId: vaultId === "all" ? undefined : vaultId, query: queryText })
+    ]);
+    setObsidianVaults(vaultList);
+    setObsidianTasks(taskList);
+    setObsidianNotes(noteList);
+  }
+
+  async function handleObsidianChanged() {
+    await refreshObsidian();
+  }
+
   useEffect(() => {
     reload().catch((error) => setToast(`加载失败：${String(error)}`));
   }, []);
@@ -461,6 +822,10 @@ export default function App() {
   useEffect(() => {
     refreshTripSearch(tripsQuery).catch((error) => console.warn("Failed to search trips", error));
   }, [tripsQuery]);
+
+  useEffect(() => {
+    refreshObsidian(obsidianQuery, activeObsidianVault).catch((error) => console.warn("Failed to load Obsidian index", error));
+  }, [obsidianQuery, activeObsidianVault]);
 
   useEffect(() => {
     const onToast = (event: Event) => {
@@ -490,6 +855,65 @@ export default function App() {
     window.addEventListener("orbit-open-trip", onOpenTrip);
     return () => window.removeEventListener("orbit-open-trip", onOpenTrip);
   }, [items]);
+
+  useEffect(() => {
+    const onOpenObsidian = () => {
+      setActiveView("obsidian");
+    };
+    const onObsidianChanged = () => {
+      void handleObsidianChanged();
+    };
+    window.addEventListener("orbit-open-obsidian", onOpenObsidian);
+    window.addEventListener("orbit://obsidian-changed", onObsidianChanged);
+    return () => {
+      window.removeEventListener("orbit-open-obsidian", onOpenObsidian);
+      window.removeEventListener("orbit://obsidian-changed", onObsidianChanged);
+    };
+  }, [obsidianQuery, activeObsidianVault]);
+
+  useEffect(() => {
+    if (!isTodoPanelWindow || !todoPanelPayload.noteId) return;
+    let cancelled = false;
+    setTodoPanelLoading(true);
+    listObsidianNoteTasks(todoPanelPayload.noteId)
+      .then((tasks) => {
+        if (!cancelled) setTodoPanelTasks(tasks);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setTodoPanelTasks([]);
+          setToast(`读取待办失败：${String(error)}`);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setTodoPanelLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isTodoPanelWindow, todoPanelPayload.noteId]);
+
+  useEffect(() => {
+    if (!isTodoPanelWindow || !isTauriRuntime()) return;
+    let unlisten: (() => void) | undefined;
+    let disposed = false;
+    import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<TodoPanelPayload>("orbit://todo-note", (event) => {
+        setTodoPanelPayload(event.payload);
+      }))
+      .then((nextUnlisten) => {
+        if (disposed) {
+          nextUnlisten();
+        } else {
+          unlisten = nextUnlisten;
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [isTodoPanelWindow]);
 
   function focusSearch() {
     setActiveView("dashboard");
@@ -693,7 +1117,12 @@ export default function App() {
 
     const q = query.trim().toLowerCase();
     if (!q) {
-      return matched;
+      const orderMap = new Map(localOrder.map((id, index) => [id, index]));
+      return matched.slice().sort((a, b) => {
+        const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+        const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+        return aIdx - bIdx;
+      });
     }
 
     return matched.slice().sort((a, b) => {
@@ -711,10 +1140,11 @@ export default function App() {
       if (aLaunch !== bLaunch) return bLaunch - aLaunch;
       return a.title.localeCompare(b.title, "zh-Hans-CN");
     });
-  }, [activeGroup, items, plugins, query]);
+  }, [activeGroup, items, plugins, query, localOrder]);
 
   const favoriteItems = filteredItems.filter((item) => item.favorite);
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const itemByTarget = useMemo(() => new Map(items.map((item) => [item.target, item])), [items]);
   const enabledPlugins = plugins.filter((plugin) => plugin.enabled).length;
   const density = settings?.density === "compact" ? "compact" : "comfortable";
   const isLocalGalaxyTheme = activeTheme?.id === "local-galaxy";
@@ -737,6 +1167,7 @@ export default function App() {
   const activeViewMeta: Record<ViewId, { title: string; subtitle: string }> = {
     dashboard: { title: "资源中心", subtitle: "统一管理本地应用、文件、网址与自动化入口" },
     trips: { title: "Trips", subtitle: "为资源记录快捷键、流程、参数和状态提示" },
+    obsidian: { title: "Obsidian", subtitle: "只读索引本地 vault，聚合笔记和 Markdown 待办" },
     settings: { title: "设置中心", subtitle: "系统偏好、引擎、主题与数据维护" },
     logs: { title: "运行日志", subtitle: "查看最近的引擎事件、扫描结果与系统反馈" }
   };
@@ -947,6 +1378,27 @@ export default function App() {
     }
   }
 
+  async function removeGroup(groupId: string) {
+    const group = groups.find((candidate) => candidate.id === groupId);
+    if (!group || !group.custom) {
+      setToast("默认分组不可删除");
+      return;
+    }
+    const affected = items.filter((item) => item.group === groupId).length;
+    setBusy(true);
+    try {
+      const nextGroups = await deleteGroup(groupId);
+      setGroups(nextGroups);
+      if (activeGroup === groupId) setActiveGroup("all");
+      await reload();
+      setToast(affected > 0 ? `已删除分组「${group.title}」，${affected} 个资源已迁移到"全部"` : `已删除分组「${group.title}」`);
+    } catch (error) {
+      setToast(`删除分组失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function toggleSelected(id: string) {
     setSelectedIds((current) => (current.includes(id) ? current.filter((itemId) => itemId !== id) : [...current, id]));
   }
@@ -1096,19 +1548,7 @@ export default function App() {
       }
 
       // 默认选中所有项，但自动过滤包含 "uninstall" 或 "卸载" 字样的项
-      const selectedIndices = new Set<number>();
-      scanned.forEach((item, index) => {
-        const titleLower = item.title.toLowerCase();
-        const subtitleLower = item.subtitle.toLowerCase();
-        const targetLower = item.target.toLowerCase();
-        const isUninstall = titleLower.includes("uninstall") || titleLower.includes("卸载") 
-          || subtitleLower.includes("uninstall") || subtitleLower.includes("卸载")
-          || targetLower.includes("uninstall") || targetLower.includes("卸载");
-        
-        if (!isUninstall) {
-          selectedIndices.add(index);
-        }
-      });
+      const selectedIndices = buildDefaultImportSelection(kind, scanned);
 
       setImportPreview({
         kind,
@@ -1227,6 +1667,20 @@ export default function App() {
       setToast(snapshot.settings.safeMode ? "安全模式已启用：第三方插件暂时停用" : "安全模式已关闭");
     } catch (error) {
       setToast(`安全模式更新失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleAutoPinnedMode() {
+    setBusy(true);
+    try {
+      const next = !settings?.autoPinnedMode;
+      const snapshot = await setAutoPinnedMode(next);
+      applySnapshot(snapshot);
+      setToast(next ? "自动置顶模式已启用：启动资源后自动移动至最前" : "自动置顶模式已关闭");
+    } catch (error) {
+      setToast(`置顶模式更新失败：${String(error)}`);
     } finally {
       setBusy(false);
     }
@@ -1400,6 +1854,7 @@ export default function App() {
   const navItems: Array<{ id: ViewId; title: string; icon: JSX.Element }> = [
     { id: "dashboard", title: "工作台", icon: <LayoutDashboard size={21} /> },
     { id: "trips", title: "Trips", icon: <Lightbulb size={21} /> },
+    { id: "obsidian", title: "Obsidian", icon: <NotebookText size={21} /> },
     { id: "settings", title: "设置", icon: <Settings size={21} /> },
     { id: "logs", title: "日志", icon: <Database size={21} /> }
   ];
@@ -1492,6 +1947,177 @@ export default function App() {
     await runEditMenuCommand(command, target);
   }
 
+  function formatIndexTime(value?: string | null) {
+    if (!value) return "未扫描";
+    return lastLaunchedText({ lastLaunchedAt: value } as OrbitItem);
+  }
+
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function addObsidianVaultFromPicker() {
+    setBusy(true);
+    try {
+      const path = await pickObsidianVaultPath();
+      if (!path) {
+        setToast("未选择 Obsidian Vault");
+        return;
+      }
+      const vault = await addObsidianVault(path);
+      setObsidianScanningId(vault.id);
+      await scanObsidianVault(vault.id);
+      await refreshObsidian();
+      setToast(`已索引 Obsidian Vault：${vault.name}`);
+    } catch (error) {
+      setToast(`添加 Obsidian Vault 失败：${String(error)}`);
+    } finally {
+      setObsidianScanningId(null);
+      setBusy(false);
+    }
+  }
+
+  async function rescanAllObsidianVaults() {
+    if (obsidianVaults.length === 0) {
+      setToast("请先添加 Obsidian Vault");
+      return;
+    }
+    setBusy(true);
+    try {
+      let totalTasks = 0;
+      for (const vault of obsidianVaults) {
+        setObsidianScanningId(vault.id);
+        const result = await scanObsidianVault(vault.id);
+        totalTasks += result.taskCount;
+      }
+      await refreshObsidian();
+      setToast(`已重新扫描 ${obsidianVaults.length} 个 vault，索引 ${totalTasks} 条 checkbox`);
+    } catch (error) {
+      setToast(`重新扫描失败：${String(error)}`);
+    } finally {
+      setObsidianScanningId(null);
+      setBusy(false);
+    }
+  }
+
+  async function deleteObsidianVault(vault: ObsidianVaultConfig) {
+    if (!window.confirm(`移除 Obsidian Vault「${vault.name}」？这只会清理本地索引，不会删除原始笔记。`)) return;
+    setBusy(true);
+    try {
+      await removeObsidianVault(vault.id);
+      await refreshObsidian();
+      setToast(`已移除 Obsidian Vault：${vault.name}`);
+    } catch (error) {
+      setToast(`移除 Obsidian Vault 失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openObsidianTask(task: ObsidianTask) {
+    try {
+      const result = await openObsidianNote(task.vaultId, task.relativePath, task.lineNumber);
+      setToast(result);
+    } catch (error) {
+      setToast(`打开 Obsidian 笔记失败：${String(error)}`);
+    }
+  }
+
+  async function handleTodoToggle(event: React.MouseEvent, task: ObsidianTask) {
+    event.stopPropagation();
+    try {
+      const updated = await toggleObsidianTaskCompletion(task.id);
+      // Update local state to reflect the change immediately
+      setTodoPanelTasks((prev) =>
+        prev.map((t) => (t.id === updated.id ? updated : t))
+      );
+    } catch (error) {
+      setToast(`同步待办状态失败：${String(error)}`);
+    }
+  }
+
+  async function openObsidianNoteResource(note: ObsidianNoteIndex) {
+    try {
+      const result = await openObsidianNote(note.vaultId, note.relativePath, null);
+      setToast(result);
+    } catch (error) {
+      setToast(`打开 Obsidian 笔记失败：${String(error)}`);
+    }
+  }
+
+  async function addObsidianNoteToResources(note: ObsidianNoteIndex) {
+    const existing = itemByTarget.get(note.filePath);
+    if (existing) {
+      setToast("这篇笔记已在资源中心");
+      return;
+    }
+    setBusy(true);
+    try {
+      await createItem({
+        title: note.title,
+        subtitle: `${note.vaultName} · ${note.relativePath}`,
+        kind: "file",
+        group: "work",
+        target: note.filePath,
+        aliases: uniqueList([note.title, note.relativePath, note.vaultName]),
+        tags: uniqueList(["obsidian", note.vaultName, ...note.tags]),
+        icon: "NotebookText",
+        accent: "#8b7cf6",
+        favorite: note.favorite
+      });
+      await reload();
+      setToast(`已加入资源中心：${note.title}`);
+    } catch (error) {
+      setToast(`加入资源中心失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleObsidianNoteFavoriteAction(note: ObsidianNoteIndex) {
+    const existing = itemByTarget.get(note.filePath);
+    if (existing) {
+      await toggleFavorite(existing);
+      return;
+    }
+    setBusy(true);
+    try {
+      await toggleObsidianNoteFavorite(note.id, !note.favorite);
+      await refreshObsidian();
+    } catch (error) {
+      setToast(`更新笔记收藏失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function editObsidianNoteResource(note: ObsidianNoteIndex) {
+    const existing = itemByTarget.get(note.filePath);
+    if (existing) {
+      setEditor({ mode: "edit", item: existing, input: inputFromItem(existing) });
+      return;
+    }
+    void openObsidianNoteResource(note);
+  }
+
+  async function openTodoPanelForNote(note: ObsidianNoteIndex) {
+    try {
+      await openObsidianTodoWindow(note.id);
+    } catch (error) {
+      setToast(`打开待办面板失败：${String(error)}`);
+    }
+  }
+
+  async function toggleTodoPanelPin() {
+    const next = !todoPanelPinned;
+    try {
+      await setTodoWindowAlwaysOnTop(next);
+      setTodoPanelPinned(next);
+    } catch (error) {
+      setToast(`切换置顶失败：${String(error)}`);
+    }
+  }
+
   const renderDashboard = () => (
     <section className="page-layout dashboard-page">
       <section className="kpi-grid" aria-label="工作台概览">
@@ -1519,7 +2145,7 @@ export default function App() {
 
       <section className="group-tabs" aria-label="资源分组">
         {visibleGroups.map((group) => (
-          <button key={group.id} className={activeGroup === group.id ? "selected" : ""} onClick={() => setActiveGroup(group.id)}>
+          <button key={group.id} data-group-id={group.id} className={activeGroup === group.id ? "selected" : ""} onClick={() => setActiveGroup(group.id)}>
             <Icon name={group.icon} size={16} />
             <span>{group.title}</span>
           </button>
@@ -1556,66 +2182,29 @@ export default function App() {
           )}
 
           <div className="resource-list">
-            {filteredItems.map((item) => (
-              <article key={item.id} className={`resource-row ${selectedIds.includes(item.id) ? "selected" : ""}`} data-resource-id={item.id}>
-                {batchMode && (
-                  <label className="tile-check">
-                    <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
-                  </label>
-                )}
-                <button type="button" className="resource-launch" onClick={() => (batchMode ? toggleSelected(item.id) : openItem(item))} disabled={busy}>
-                  <span
-                    className="resource-icon"
-                    style={resourceIconStyle(item)}
-                  >
-                    <Icon name={item.icon} size={26} />
-                  </span>
-                  <span className="resource-copy">
-                    <strong>{item.title}</strong>
-                    <small>{item.subtitle || item.target}</small>
-                    <span className="resource-group-tags" aria-label="资源标签">
-                      {groupLabelsForItem(item, groups).map((group) => (
-                        <em key={group.id}>{group.title}</em>
-                      ))}
-                    </span>
-                  </span>
-                  <span className="resource-meta-column">
-                    <em>{item.launchCount} 次启动</em>
-                    <small>{lastLaunchedText(item)}</small>
-                  </span>
-                </button>
-                {!batchMode && (
-                  <div className="tile-actions">
-                    <button
-                      className={`trip-action ${tripCounts[item.id] ? "has-trips" : ""}`}
-                      title="Trips"
-                      onClick={() => {
-                        setTripPanelItem(item);
-                        setTripPanelHighlightId(null);
-                      }}
-                      disabled={busy}
-                    >
-                      <Lightbulb size={15} />
-                      {tripCounts[item.id] > 0 && <span className="trip-badge">{tripCounts[item.id]}</span>}
-                    </button>
-                    <button
-                      className={`favorite-action ${item.favorite ? "is-favorite" : ""}`}
-                      title="星标"
-                      onClick={() => toggleFavorite(item)}
-                      disabled={busy}
-                    >
-                      {item.favorite ? <img src={localGalaxyAssets.icons.favoriteStar20.src} alt="" /> : <Star size={15} />}
-                    </button>
-                    <button title="编辑" onClick={() => setEditor({ mode: "edit", item, input: inputFromItem(item) })}>
-                      <Pencil size={15} />
-                    </button>
-                    <button title="删除" onClick={() => removeItem(item)} disabled={busy}>
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                )}
-              </article>
-            ))}
+            <DndContext sensors={batchMode ? [] : sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={localOrder} strategy={rectSortingStrategy}>
+                {filteredItems.map((item) => (
+                  <SortableResourceRow
+                    key={item.id}
+                    item={item}
+                    selectedIds={selectedIds}
+                    batchMode={batchMode}
+                    busy={busy}
+                    toggleSelected={toggleSelected}
+                    openItem={openItem}
+                    groups={groups}
+                    tripCounts={tripCounts}
+                    setTripPanelItem={setTripPanelItem}
+                    setTripPanelHighlightId={setTripPanelHighlightId}
+                    toggleFavorite={toggleFavorite}
+                    setEditor={setEditor}
+                    removeItem={removeItem}
+                    resourceIconStyle={resourceIconStyle}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
             {filteredItems.length === 0 && (
               <div className="empty-state">
                 <Search size={28} />
@@ -1699,15 +2288,7 @@ export default function App() {
               <p className="eyebrow">Trip Notes</p>
               <h2>资源提示笔记</h2>
             </div>
-            <div className="search-shell trips-search-shell">
-              <Search size={17} />
-              <input value={tripsQuery} onChange={(event) => setTripsQuery(event.target.value)} placeholder="搜索 Trip 标题、内容、状态或标签..." />
-              {tripsQuery && (
-                <button type="button" title="清空" onClick={() => setTripsQuery("")}>
-                  <X size={15} />
-                </button>
-              )}
-            </div>
+
           </div>
 
           <div className="trips-result-grid">
@@ -1917,6 +2498,145 @@ export default function App() {
     </section>
   );
 
+  const renderObsidianPage = () => {
+    const today = todayKey();
+    const totalIndexedTasks = obsidianVaults.reduce((sum, vault) => sum + vault.taskCount, 0);
+    const totalIndexedFiles = obsidianVaults.reduce((sum, vault) => sum + vault.fileCount, 0);
+    const dueToday = obsidianTasks.filter((task) => task.dueDate === today).length;
+    const activeVault = obsidianVaults.find((vault) => vault.id === activeObsidianVault);
+
+    return (
+      <section className="page-layout obsidian-page">
+        <section className="kpi-grid obsidian-kpis" aria-label="Obsidian overview">
+          <article className="kpi-card">
+            <span>未完成待办</span>
+            <strong>{obsidianTasks.length}</strong>
+            <em>当前搜索范围</em>
+          </article>
+          <article className="kpi-card">
+            <span>今日到期</span>
+            <strong>{dueToday}</strong>
+            <em>{today}</em>
+          </article>
+          <article className="kpi-card">
+            <span>已配置 Vault</span>
+            <strong>{obsidianVaults.length}</strong>
+            <em>{activeVault?.name ?? "全部仓库"}</em>
+          </article>
+          <article className="kpi-card">
+            <span>索引规模</span>
+            <strong>{totalIndexedFiles}</strong>
+            <em>{totalIndexedTasks} 条 checkbox</em>
+          </article>
+        </section>
+
+        <section className="group-tabs obsidian-vault-tabs" aria-label="Obsidian vault tabs">
+          <button type="button" className={activeObsidianVault === "all" ? "selected" : ""} onClick={() => setActiveObsidianVault("all")}>
+            <CircleDot size={16} />
+            <span>全部</span>
+            <em>{totalIndexedFiles}</em>
+          </button>
+          {obsidianVaults.map((vault) => (
+            <button key={vault.id} type="button" className={activeObsidianVault === vault.id ? "selected" : ""} onClick={() => setActiveObsidianVault(vault.id)}>
+              <NotebookText size={16} />
+              <span>{vault.name}</span>
+              <em>{vault.fileCount}</em>
+            </button>
+          ))}
+          {obsidianVaults.length === 0 && (
+            <button type="button" onClick={addObsidianVaultFromPicker} disabled={busy}>
+              <FolderOpen size={16} />
+              <span>添加 Vault</span>
+            </button>
+          )}
+        </section>
+
+        <section className="surface-panel obsidian-surface">
+          <div className="section-head">
+            <div>
+              <p className="eyebrow">Obsidian Local Index</p>
+              <h2>{obsidianNotes.length} 篇笔记</h2>
+            </div>
+            <div className="section-actions obsidian-toolbar">
+              <span>{obsidianVaults.length} 个 vault · {totalIndexedTasks} 条 checkbox</span>
+              <button type="button" className="secondary-action compact-action" onClick={addObsidianVaultFromPicker} disabled={busy}>
+                <FolderOpen size={16} />
+                添加 Vault
+              </button>
+              <button type="button" className="secondary-action compact-action" onClick={rescanAllObsidianVaults} disabled={busy || obsidianVaults.length === 0}>
+                <RefreshCcw size={16} className={obsidianScanningId ? "spin-icon" : ""} />
+                重新扫描
+              </button>
+            </div>
+          </div>
+
+
+
+          <div className="resource-list obsidian-note-list">
+            {obsidianNotes.map((note) => {
+              const linkedItem = itemByTarget.get(note.filePath);
+              const isFavorite = linkedItem?.favorite ?? note.favorite;
+              return (
+                <article key={note.id} className={`resource-row obsidian-note-row ${linkedItem ? "is-resource" : ""}`}>
+                  <button type="button" className="resource-launch" onClick={() => void openObsidianNoteResource(note)} disabled={busy}>
+                    <span className="resource-icon obsidian-note-icon" style={{ "--accent": linkedItem?.accent ?? "#8b7cf6", "--asset-icon-base": "none" } as CSSProperties}>
+                      <NotebookText size={25} />
+                    </span>
+                    <span className="resource-copy">
+                      <strong>{note.title}</strong>
+                      <small>{note.relativePath}</small>
+                      <span className="resource-group-tags" aria-label="note tags">
+                        <em>{note.vaultName}</em>
+                        {note.tags.slice(0, 2).map((tag) => (
+                          <em key={tag}>{tag}</em>
+                        ))}
+                        {linkedItem && <em>资源中心</em>}
+                      </span>
+                    </span>
+                    <span className="resource-meta-column">
+                      <em>{note.taskCount} 条待办</em>
+                      <small>{formatIndexTime(note.modifiedAt)}</small>
+                    </span>
+                  </button>
+                  <div className="tile-actions obsidian-note-actions">
+                    <button title="Add to todo" onClick={() => void openTodoPanelForNote(note)} disabled={busy || note.taskCount === 0}>
+                      <CheckCircle2 size={15} />
+                    </button>
+                    <button className={`favorite-action ${isFavorite ? "is-favorite" : ""}`} title="Favorite" onClick={() => void toggleObsidianNoteFavoriteAction(note)} disabled={busy}>
+                      {isFavorite ? <img src={localGalaxyAssets.icons.favoriteStar20.src} alt="" /> : <Star size={15} />}
+                    </button>
+                    <button title={linkedItem ? "Edit resource" : "Open note"} onClick={() => editObsidianNoteResource(note)} disabled={busy}>
+                      <Pencil size={15} />
+                    </button>
+                    {linkedItem ? (
+                      <button title="Remove from resource center" onClick={() => removeItem(linkedItem)} disabled={busy}>
+                        <Trash2 size={15} />
+                      </button>
+                    ) : (
+                      <button title="Add to resource center" onClick={() => void addObsidianNoteToResources(note)} disabled={busy}>
+                        <PlusCircle size={15} />
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
+            {obsidianNotes.length === 0 && (
+              <div className="empty-state obsidian-empty-state">
+                <NotebookText size={28} />
+                <strong>{obsidianVaults.length ? "没有匹配的笔记" : "还没有配置 Obsidian Vault"}</strong>
+                <span>{obsidianVaults.length ? "调整搜索或重新扫描 vault。" : "添加 vault 后，OrbitStart 会建立只读本地索引。"}</span>
+                <button type="button" className="secondary-action compact-action" onClick={obsidianVaults.length ? rescanAllObsidianVaults : addObsidianVaultFromPicker} disabled={busy}>
+                  {obsidianVaults.length ? "重新扫描" : "添加 Vault"}
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
+      </section>
+    );
+  };
+
   const renderLogs = () => (
     <section className="settings-page-grid logs-settings">
       <div className="setting-card wide-card logs-panel">
@@ -2010,6 +2730,10 @@ export default function App() {
             <input type="checkbox" checked={batchMode} onChange={(event) => (event.target.checked ? setBatchMode(true) : exitBatchMode())} />
             批量操作模式
           </label>
+          <label className="setting-inline">
+            <input type="checkbox" checked={Boolean(settings?.autoPinnedMode)} onChange={toggleAutoPinnedMode} />
+            自动置顶模式
+          </label>
           <button className="wide-command" onClick={addCustomGroup}>
             <PlusCircle size={17} />
             <span>新建自定义分组</span>
@@ -2066,7 +2790,7 @@ export default function App() {
           <span><strong>{items.length}</strong>资源</span>
           <span><strong>{enabledPlugins}</strong>启用引擎</span>
           <span><strong>{themes.length}</strong>主题</span>
-          <span><strong>0.5.0</strong>版本</span>
+          <span><strong>0.5.5</strong>版本</span>
         </div>
       </div>
       <div className="setting-card">
@@ -2082,11 +2806,59 @@ export default function App() {
     </section>
   );
 
+  const renderObsidianSettings = () => (
+    <section className="settings-page-grid obsidian-settings">
+      <div className="setting-card wide-card">
+        <div className="section-head">
+          <div>
+            <p className="eyebrow">Obsidian</p>
+            <h2>Vault 索引</h2>
+            <span>只读扫描本地 Markdown checkbox，不写回源文件。</span>
+          </div>
+          <div className="section-actions obsidian-toolbar">
+            <button type="button" className="secondary-action compact-action" onClick={addObsidianVaultFromPicker} disabled={busy}>
+              <FolderOpen size={16} />
+              添加 Vault
+            </button>
+            <button type="button" className="secondary-action compact-action" onClick={rescanAllObsidianVaults} disabled={busy || obsidianVaults.length === 0}>
+              <RefreshCcw size={16} className={obsidianScanningId ? "spin-icon" : ""} />
+              重新扫描
+            </button>
+          </div>
+        </div>
+        <div className="obsidian-settings-list">
+          {obsidianVaults.map((vault) => (
+            <article key={vault.id} className="obsidian-settings-row">
+              <div>
+                <strong>{vault.name}</strong>
+                <span>{vault.path}</span>
+                <small>{vault.fileCount} 篇笔记 · {vault.taskCount} 条 checkbox · {formatIndexTime(vault.lastIndexedAt)}</small>
+              </div>
+              <div>
+                <button type="button" className="secondary-action compact-action" onClick={() => setActiveView("obsidian")}>
+                  查看
+                </button>
+                <button type="button" className="secondary-action compact-action" onClick={() => void scanObsidianVault(vault.id).then(() => refreshObsidian())} disabled={busy}>
+                  扫描
+                </button>
+                <button type="button" className="secondary-action compact-action danger-soft" onClick={() => void deleteObsidianVault(vault)} disabled={busy}>
+                  移除
+                </button>
+              </div>
+            </article>
+          ))}
+          {obsidianVaults.length === 0 && <p className="empty-copy">尚未添加 vault。添加后可在 Obsidian 页面查看笔记与待办。</p>}
+        </div>
+      </div>
+    </section>
+  );
+
   const renderSettings = () => {
     const sections: Array<{ id: SettingsSection; title: string; icon: JSX.Element }> = [
       { id: "general", title: "基础设置", icon: <Settings size={18} /> },
       { id: "plugins", title: "引擎管理", icon: <Blocks size={18} /> },
       { id: "themes", title: "主题工作室", icon: <Palette size={18} /> },
+      { id: "obsidian", title: "Obsidian", icon: <NotebookText size={18} /> },
       { id: "dev", title: "开发套件", icon: <Hammer size={18} /> },
       { id: "data", title: "数据备份", icon: <Database size={18} /> },
       { id: "about", title: "关于", icon: <Info size={18} /> }
@@ -2106,6 +2878,7 @@ export default function App() {
           {settingsSection === "general" && renderGeneralSettings()}
           {settingsSection === "plugins" && renderPlugins()}
           {settingsSection === "themes" && renderThemes()}
+          {settingsSection === "obsidian" && renderObsidianSettings()}
           {settingsSection === "dev" && renderDev()}
           {settingsSection === "data" && renderDataSettings()}
           {settingsSection === "about" && renderAbout()}
@@ -2120,7 +2893,7 @@ export default function App() {
 
     if (dialog.type === "group") {
       return (
-        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true">
+        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
           <form
             className="modal-panel dialog-panel"
             onSubmit={(event) => {
@@ -2161,7 +2934,7 @@ export default function App() {
 
     if (dialog.type === "delete-item") {
       return (
-        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true">
+        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
           <div className="modal-panel dialog-panel">
             <div className="modal-head">
               <div>
@@ -2195,7 +2968,7 @@ export default function App() {
 
     if (dialog.type === "batch-delete") {
       return (
-        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true">
+        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
           <div className="modal-panel dialog-panel">
             <div className="modal-head">
               <div>
@@ -2222,7 +2995,7 @@ export default function App() {
 
     if (dialog.type === "batch-move") {
       return (
-        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true">
+        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
           <div className="modal-panel dialog-panel">
             <div className="modal-head">
               <div>
@@ -2268,7 +3041,7 @@ export default function App() {
     }
 
     return (
-      <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true">
+      <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
         <form
           className="modal-panel dialog-panel"
           onSubmit={(event) => {
@@ -2354,6 +3127,29 @@ export default function App() {
             <button type="button" onClick={() => void runBlankContextAction("settings")}>打开设置</button>
           </>
         )}
+
+        {contextMenu.kind === "group" && contextMenu.groupId && (() => {
+          const targetGroup = groups.find((candidate) => candidate.id === contextMenu.groupId);
+          if (!targetGroup) return null;
+          return (
+            <>
+              <button type="button" onClick={() => { setActiveGroup(targetGroup.id); setContextMenu(null); }}>切换到此分组</button>
+              {targetGroup.custom && (
+                <>
+                  <span className="context-separator" />
+                  <button
+                    type="button"
+                    className="context-danger"
+                    onClick={() => { void removeGroup(targetGroup.id); setContextMenu(null); }}
+                    disabled={busy}
+                  >
+                    删除分组「{targetGroup.title}」
+                  </button>
+                </>
+              )}
+            </>
+          );
+        })()}
       </section>
     );
   };
@@ -2362,7 +3158,7 @@ export default function App() {
     if (!selectedPlugin) return null;
     const detail = pluginDetail(selectedPlugin);
     return (
-      <section className="palette-backdrop" role="dialog" aria-modal="true">
+      <section className="palette-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setSelectedPlugin(null); }}>
         <div className="modal-panel plugin-detail-panel">
           <div className="modal-head">
             <div>
@@ -2400,7 +3196,7 @@ export default function App() {
   const renderBackupDialog = () => {
     if (!backupOpen) return null;
     return (
-      <section className="palette-backdrop" role="dialog" aria-modal="true">
+      <section className="palette-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setBackupOpen(false); }}>
         <div className="modal-panel backup-panel">
           <div className="modal-head">
             <div>
@@ -2448,22 +3244,9 @@ export default function App() {
           item.target.toLowerCase().includes(q)
         );
       });
+    const filterReasons = buildImportFilterReasons(kind, items);
 
     // 检查某项是否为卸载程序
-    const checkIsUninstall = (item: OrbitItemInput) => {
-      const titleLower = item.title.toLowerCase();
-      const subtitleLower = item.subtitle.toLowerCase();
-      const targetLower = item.target.toLowerCase();
-      return (
-        titleLower.includes("uninstall") ||
-        titleLower.includes("卸载") ||
-        subtitleLower.includes("uninstall") ||
-        subtitleLower.includes("卸载") ||
-        targetLower.includes("uninstall") ||
-        targetLower.includes("卸载")
-      );
-    };
-
     // 切换单个勾选状态
     const handleToggleItem = (index: number) => {
       const nextSelected = new Set(selectedIndices);
@@ -2522,7 +3305,7 @@ export default function App() {
     const label = kind === "shortcuts" ? "本地程序" : "浏览器书签";
 
     return (
-      <section className="palette-backdrop" role="dialog" aria-modal="true">
+      <section className="palette-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setImportPreview(null); }}>
         <div className="modal-panel import-preview-panel">
           <div className="modal-head">
             <div>
@@ -2566,12 +3349,14 @@ export default function App() {
               <div className="empty-preview">没有找到匹配的项目</div>
             ) : (
               filteredItemsWithOriginalIndex.map(({ item, index }) => {
-                const isUninstall = checkIsUninstall(item);
+                const filterReason = filterReasons.get(index);
+                const isUninstall = filterReason?.code === "uninstall";
+                const isFiltered = Boolean(filterReason);
                 const isChecked = selectedIndices.has(index);
                 return (
                   <div
                     key={index}
-                    className={`import-preview-item ${isUninstall ? "is-uninstall" : ""} ${isChecked ? "is-checked" : ""}`}
+                    className={`import-preview-item ${isFiltered ? "is-filtered" : ""} ${isUninstall ? "is-uninstall" : ""} ${isChecked ? "is-checked" : ""}`}
                     onClick={() => handleToggleItem(index)}
                   >
                     <input
@@ -2585,7 +3370,7 @@ export default function App() {
                     <div className="item-info">
                       <div className="item-title">
                         {item.title}
-                        {isUninstall && <span className="uninstall-tag">卸载程序 / 无效项</span>}
+                        {filterReason && <span className="filter-tag">{filterReason.label}</span>}
                       </div>
                       <div className="item-subtitle" title={item.subtitle}>
                         {item.subtitle}
@@ -2609,6 +3394,95 @@ export default function App() {
       </section>
     );
   };
+
+  const renderTodoPanelWindow = () => {
+    const noteTitle = todoPanelPayload.title || todoPanelTasks[0]?.noteTitle || "Obsidian Todo";
+    const vaultName = todoPanelPayload.vaultName || todoPanelTasks[0]?.vaultName || "Obsidian";
+    const relativePath = todoPanelPayload.relativePath || todoPanelTasks[0]?.relativePath || "";
+    return (
+      <>
+        <main className={`app-shell todo-window-shell density-${density}`} style={appShellStyle} onContextMenu={handleAppContextMenu}>
+          {isLocalGalaxyTheme && (
+            <LocalGalaxyBackdrop
+              mainOpacity={0.56}
+              nebulaOpacity={0.1}
+              starOpacity={0.1}
+              topGlowOpacity={0.1}
+              orbitOpacity={0.04}
+              showOrbitLayer={false}
+            />
+          )}
+          <header className="window-titlebar todo-titlebar" onPointerDown={handleTitlebarPointerDown} onDoubleClick={handleTitlebarDoubleClick}>
+            <div className="window-brand" data-tauri-drag-region>
+              <span className="window-brand-glyph">{renderBrandIcon(12)}</span>
+              <span>Todo</span>
+            </div>
+            <div className="window-drag-fill" data-tauri-drag-region />
+            <div className="window-controls" onPointerDown={(event) => event.stopPropagation()}>
+              <button type="button" className={`pin-window ${todoPanelPinned ? "is-pinned" : ""}`} aria-label="Pin always on top" title={todoPanelPinned ? "Unpin" : "Pin always on top"} onClick={() => void toggleTodoPanelPin()}>
+                {todoPanelPinned ? <PinOff size={14} /> : <Pin size={14} />}
+              </button>
+              <button type="button" aria-label="Minimize" title="Minimize" onClick={minimizeWindow}>-</button>
+              <button type="button" aria-label="Maximize or restore" title="Maximize or restore" onClick={toggleMaximizeWindow}>□</button>
+              <button type="button" aria-label="Close" title="Close" className="close-window" onClick={closeWindow}>×</button>
+            </div>
+          </header>
+
+          <section className="todo-panel-body">
+            <header className="todo-note-head">
+              <p className="eyebrow">{vaultName}</p>
+              <h1>{noteTitle}</h1>
+              <span>{relativePath || "当前笔记"}</span>
+            </header>
+
+            <section className="todo-panel-summary">
+              <strong>{todoPanelTasks.filter((task) => !task.completed).length}</strong>
+              <span>未完成</span>
+              <strong>{todoPanelTasks.length}</strong>
+              <span>checkbox</span>
+            </section>
+
+            <div className="todo-task-list">
+              {todoPanelLoading && (
+                <div className="empty-state todo-empty-state">
+                  <RefreshCcw size={24} className="spin-icon" />
+                  <strong>正在读取待办</strong>
+                </div>
+              )}
+              {!todoPanelLoading && todoPanelTasks.map((task) => (
+                <div key={task.id} className={`todo-task-row ${task.completed ? "is-completed" : ""}`}>
+                  <span className="todo-task-check">
+                    <input
+                      type="checkbox"
+                      checked={task.completed}
+                      onChange={(event) => void handleTodoToggle(event as unknown as React.MouseEvent, task)}
+                    />
+                  </span>
+                  <span className="todo-task-copy" onClick={() => void openObsidianTask(task)} style={{ cursor: "pointer" }}>
+                    <strong>{task.text || "未命名待办"}</strong>
+                    <small>第 {task.lineNumber} 行{task.tags.length ? ` · ${task.tags.join(" ")}` : ""}</small>
+                  </span>
+                  <ExternalLink size={15} onClick={() => void openObsidianTask(task)} style={{ cursor: "pointer", flexShrink: 0 }} />
+                </div>
+              ))}
+              {!todoPanelLoading && todoPanelTasks.length === 0 && (
+                <div className="empty-state todo-empty-state">
+                  <CheckCircle2 size={28} />
+                  <strong>这篇笔记没有 checkbox</strong>
+                  <span>重新扫描 vault 后会读取 Markdown 里的 - [ ]、-[ ] 和 - [x]。</span>
+                </div>
+              )}
+            </div>
+          </section>
+        </main>
+        {contextMenu && renderContextMenu()}
+      </>
+    );
+  };
+
+  if (isTodoPanelWindow) {
+    return renderTodoPanelWindow();
+  }
 
   if (isAuxWindow) {
     const auxTitle = auxPanel === "plugins" ? "插件管理" : auxPanel === "themes" ? "主题工作室" : auxPanel === "about" ? "关于 OrbitStart" : "设置";
@@ -2782,20 +3656,51 @@ export default function App() {
           </div>
         </header>
 
-        <section className="hero-strip">
-          <div className="search-shell">
-            <Search size={19} />
-            <input ref={searchInputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索应用、文件、网址、脚本、插件或标签..." />
-            <kbd>Ctrl K</kbd>
-          </div>
-          <button type="button" className="primary-action" onClick={() => setEditor({ mode: "create", input: makeEmptyInput() })} disabled={busy}>
-            <PlusCircle size={18} />
-            添加资源
-          </button>
-        </section>
+        {(activeView === "dashboard" || activeView === "trips" || activeView === "obsidian") && (
+          <section className="hero-strip">
+            <div className="search-shell">
+              <Search size={19} />
+              <input
+                ref={searchInputRef}
+                value={
+                  activeView === "dashboard"
+                    ? query
+                    : activeView === "trips"
+                    ? tripsQuery
+                    : obsidianQuery
+                }
+                onChange={(event) => {
+                  const val = event.target.value;
+                  if (activeView === "dashboard") {
+                    setQuery(val);
+                  } else if (activeView === "trips") {
+                    setTripsQuery(val);
+                  } else {
+                    setObsidianQuery(val);
+                  }
+                }}
+                placeholder={
+                  activeView === "dashboard"
+                    ? "搜索应用、文件、网址、脚本、插件或标签..."
+                    : activeView === "trips"
+                    ? "搜索 Trip 标题、内容、状态或标签..."
+                    : "搜索笔记标题、路径、Vault 或标签..."
+                }
+              />
+              <kbd>Ctrl K</kbd>
+            </div>
+            {activeView === "dashboard" && (
+              <button type="button" className="primary-action" onClick={() => setEditor({ mode: "create", input: makeEmptyInput() })} disabled={busy}>
+                <PlusCircle size={18} />
+                添加资源
+              </button>
+            )}
+          </section>
+        )}
 
         {activeView === "dashboard" && renderDashboard()}
         {activeView === "trips" && renderTripsPage()}
+        {activeView === "obsidian" && renderObsidianPage()}
         {activeView === "settings" && renderSettings()}
         {activeView === "logs" && renderLogs()}
       </section>
@@ -3055,7 +3960,7 @@ export default function App() {
       )}
 
       {selectedPlugin && (
-        <section className="palette-backdrop" role="dialog" aria-modal="true">
+        <section className="palette-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setSelectedPlugin(null); }}>
           <div className="modal-panel plugin-detail-panel">
             <div className="modal-head">
               <div>
@@ -3112,7 +4017,7 @@ export default function App() {
       )}
 
       {backupOpen && (
-        <section className="palette-backdrop" role="dialog" aria-modal="true">
+        <section className="palette-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setBackupOpen(false); }}>
           <div className="modal-panel backup-panel">
             <div className="modal-head">
               <div>
@@ -3144,7 +4049,7 @@ export default function App() {
       )}
 
       {localAuxPanel && (
-        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" style={{ zIndex: 100 }}>
+        <section className="palette-backdrop centered-backdrop aux-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setLocalAuxPanel(null); }}>
           <div className="modal-panel settings-modal-panel">
             <div className="modal-head">
               <div>

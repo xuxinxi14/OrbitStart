@@ -1,0 +1,13 @@
+{
+  "id": "obsidian-search",
+  "name": "Obsidian Search",
+  "version": "0.1.0",
+  "description": "Search local Obsidian task indexes and open source notes through OrbitStart.",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "ui:toast", "label": "Show toast messages", "risk": "low" },
+    { "id": "obsidian:read", "label": "Search and open indexed Obsidian tasks", "risk": "medium" }
+  ],
+  "contributes": { "commands": 1, "searchProviders": 1, "themes": 0, "views": 0 }
+}

@@ -72,11 +72,19 @@ html {
 
 body {
   margin: 0;
-  min-width: 980px;
   overflow: hidden;
   background: var(--bg);
   color: var(--text);
   line-height: 1.45;
+}
+
+.app-shell:not(.todo-window-shell):not(.aux-shell) {
+  min-width: 980px;
+}
+
+body.todo-body,
+body.aux-body {
+  min-width: 0 !important;
 }
 
 body,
@@ -272,6 +280,38 @@ textarea:focus-visible {
 
 .aux-shell .settings-shell {
   min-height: calc(100vh - 74px);
+}
+
+.todo-window-shell {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 34px minmax(0, 1fr);
+}
+
+.todo-window-shell .window-titlebar {
+  grid-column: 1;
+  position: relative !important;
+  padding-right: 184px !important;
+  overflow: hidden !important;
+}
+
+.todo-window-shell .window-controls {
+  position: absolute !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  z-index: 10 !important;
+}
+
+.todo-window-shell .window-drag-fill {
+  min-width: 0 !important;
+}
+
+.todo-window-shell .window-brand span:last-child {
+  display: inline-block;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mini-panel-button {
@@ -1188,6 +1228,11 @@ textarea:focus-visible {
 .window-controls .close-window:hover {
   background: rgba(232, 76, 92, 0.86);
   color: white;
+}
+
+.window-controls .pin-window.is-pinned {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent);
 }
 
 .sidebar {
@@ -2376,6 +2421,492 @@ kbd {
   }
 }
 
+.obsidian-page {
+  gap: var(--space-4);
+}
+
+.obsidian-surface {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.obsidian-toolbar,
+.obsidian-vault-actions,
+.obsidian-task-meta,
+.obsidian-settings-row > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.obsidian-layout {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.34fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  min-height: 0;
+}
+
+.obsidian-vault-list,
+.obsidian-task-panel,
+.obsidian-task-groups {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  min-width: 0;
+}
+
+.obsidian-vault-card,
+.obsidian-empty-vault,
+.obsidian-task-group,
+.obsidian-settings-row {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-soft);
+}
+
+.obsidian-vault-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+}
+
+.obsidian-vault-card strong,
+.obsidian-settings-row strong,
+.obsidian-task-group header strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.obsidian-vault-card span,
+.obsidian-settings-row span,
+.obsidian-task-group header span {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.obsidian-vault-card small,
+.obsidian-settings-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.obsidian-vault-actions button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--field);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.obsidian-vault-actions button:hover {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  color: var(--text);
+}
+
+.obsidian-empty-vault {
+  display: grid;
+  gap: var(--space-2);
+  min-height: 150px;
+  padding: var(--space-4);
+  color: var(--soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.obsidian-empty-vault svg {
+  color: var(--accent);
+}
+
+.obsidian-empty-vault strong {
+  color: var(--text);
+}
+
+.obsidian-empty-vault span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.obsidian-search-shell {
+  height: 38px;
+}
+
+.obsidian-search-shell button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.obsidian-vault-tabs button em {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.obsidian-note-list {
+  grid-template-columns: repeat(auto-fill, minmax(238px, 1fr));
+}
+
+.obsidian-note-row {
+  min-height: 154px;
+}
+
+.obsidian-note-row.is-resource {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--line));
+}
+
+.obsidian-note-icon {
+  color: #8b7cf6;
+}
+
+.obsidian-note-actions {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.todo-panel-body {
+  grid-column: 1;
+  grid-row: 2;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-3);
+  overflow: hidden;
+}
+
+.todo-note-head {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.todo-note-head h1 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-note-head span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-panel-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 4px;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+
+.todo-panel-summary strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+.todo-panel-summary span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.todo-task-list {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.todo-task-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.todo-task-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--line));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.todo-task-row.is-completed {
+  opacity: 0.62;
+}
+
+.todo-task-check {
+  display: grid;
+  place-items: center;
+}
+
+.todo-task-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.todo-task-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.todo-task-copy strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: normal !important;
+  word-break: break-all !important;
+  overflow-wrap: anywhere !important;
+}
+
+.todo-task-row.is-completed .todo-task-copy strong {
+  text-decoration: line-through;
+}
+
+.todo-task-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-empty-state {
+  min-height: 180px;
+}
+
+.obsidian-task-group {
+  overflow: hidden;
+}
+
+.obsidian-task-group header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 58px;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.obsidian-task-group header em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--soft);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.obsidian-task-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  width: 100%;
+  min-height: 68px;
+  padding: var(--space-3);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.obsidian-task-card:last-child {
+  border-bottom: 0;
+}
+
+.obsidian-task-card:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.obsidian-task-check {
+  width: 17px;
+  height: 17px;
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, var(--line));
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 3px var(--surface);
+}
+
+.obsidian-task-card.priority-high .obsidian-task-check {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 24%, transparent);
+}
+
+.obsidian-task-card.due-today {
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+
+.obsidian-task-copy {
+  min-width: 0;
+}
+
+.obsidian-task-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.obsidian-task-copy small {
+  display: block;
+  overflow: hidden;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.obsidian-task-meta {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  color: var(--muted);
+}
+
+.obsidian-task-meta em {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.obsidian-task-meta em.today {
+  border-color: color-mix(in srgb, var(--warning) 38%, var(--line));
+  color: var(--warning);
+}
+
+.obsidian-empty-state {
+  min-height: 260px;
+}
+
+.obsidian-empty-state button {
+  justify-self: center;
+}
+
+.obsidian-settings-list {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.obsidian-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3);
+}
+
+.danger-soft {
+  color: var(--danger);
+}
+
+.spin-icon {
+  animation: orbit-spin 0.9s linear infinite;
+}
+
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .obsidian-layout,
+  .obsidian-settings-row {
+    grid-template-columns: 1fr;
+  }
+
+  .obsidian-toolbar,
+  .obsidian-settings-row > div:last-child {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .obsidian-task-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .obsidian-task-meta {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}
+
 .operations-panel {
   display: grid;
   gap: var(--space-4);
@@ -2820,6 +3351,12 @@ kbd {
 .centered-backdrop {
   place-items: center;
   padding: var(--space-6);
+}
+
+/* Aux panel (settings/plugins/themes/about) — above command palette so it
+   never gets trapped underneath when opened from the palette. */
+.palette-backdrop.aux-backdrop {
+  z-index: 10001 !important;
 }
 
 .command-palette {
@@ -6222,6 +6759,38 @@ kbd {
 }
 
 /* 卸载程序警告样式 */
+.import-preview-item.is-filtered {
+  background: rgba(246, 185, 91, 0.035);
+}
+
+.import-preview-item.is-filtered:hover {
+  background: rgba(246, 185, 91, 0.08);
+  border-color: rgba(246, 185, 91, 0.22);
+}
+
+.import-preview-item.is-filtered.is-checked {
+  background: rgba(246, 185, 91, 0.08);
+}
+
+.import-preview-item.is-filtered.is-checked:hover {
+  background: rgba(246, 185, 91, 0.12);
+}
+
+.import-preview-item.is-filtered input[type="checkbox"] {
+  accent-color: var(--warning, #f6b95b);
+}
+
+.import-preview-item .filter-tag {
+  background: rgba(246, 185, 91, 0.12);
+  color: var(--warning, #f6b95b);
+  border: 1px solid rgba(246, 185, 91, 0.24);
+  font-size: 10px;
+  padding: 0.5px 5px;
+  border-radius: 3px;
+  font-weight: 600;
+  display: inline-block;
+}
+
 .import-preview-item.is-uninstall {
   background: rgba(255, 122, 144, 0.03);
 }
@@ -6243,15 +6812,10 @@ kbd {
   accent-color: var(--danger, #ff7a90);
 }
 
-.import-preview-item.is-uninstall .uninstall-tag {
+.import-preview-item.is-uninstall .filter-tag {
   background: rgba(255, 122, 144, 0.12);
   color: var(--danger, #ff7a90);
-  border: 1px solid rgba(255, 122, 144, 0.2);
-  font-size: 10px;
-  padding: 0.5px 5px;
-  border-radius: 3px;
-  font-weight: 600;
-  display: inline-block;
+  border-color: rgba(255, 122, 144, 0.2);
 }
 
 
@@ -6645,4 +7209,40 @@ kbd {
   gap: 8px;
   font-size: 15px;
   padding: 14px 28px;
+}
+
+/* Drag and Drop Sortable Resource Card styles */
+.resource-row {
+  transition: transform 160ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              box-shadow 160ms ease-out,
+              opacity 160ms ease-out;
+}
+
+.resource-row:active {
+  transform: scale(1.01);
+}
+
+.resource-row.dragging {
+  cursor: grabbing;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.36), 0 0 0 1px var(--accent) !important;
+  opacity: 0.65 !important;
+  background: var(--surface) !important;
+}
+
+.resource-row.dragging .resource-launch,
+.resource-row.dragging .tile-actions,
+.resource-row.dragging .tile-check {
+  pointer-events: none !important;
+}
+
+/* Drag placeholder visual dashed frame */
+.resource-row.dragging::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius, 12px);
+  background: transparent;
+  pointer-events: none;
+  z-index: -1;
 }

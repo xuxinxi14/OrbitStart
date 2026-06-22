@@ -16,6 +16,7 @@ export interface OrbitPluginContext {
   settings: PluginSettings;
   storage: PluginStorage;
   trips: TripsApi;
+  obsidian: ObsidianApi;
 }
 
 export interface RegisteredCommand {
@@ -56,6 +57,11 @@ export interface TripsApi {
   open(itemId: string, tripId?: string): Promise<boolean>;
 }
 
+export interface ObsidianApi {
+  search(query: string): Promise<ObsidianSearchResult[]>;
+  open(vaultId: string, relativePath: string, lineNumber?: number): Promise<boolean | string>;
+}
+
 export interface TripSearchResult {
   trip: {
     id: string;
@@ -74,4 +80,36 @@ export interface TripSearchResult {
   itemTitle: string;
   itemIcon: string;
   itemKind: string;
+}
+
+export interface ObsidianTask {
+  id: string;
+  vaultId: string;
+  vaultName: string;
+  noteId: string;
+  noteTitle: string;
+  filePath: string;
+  relativePath: string;
+  lineNumber: number;
+  rawText: string;
+  text: string;
+  completed: boolean;
+  tags: string[];
+  dueDate?: string | null;
+  priority?: "low" | "medium" | "high" | null;
+  completedAt?: string | null;
+  modifiedAt: string;
+}
+
+export interface ObsidianSearchResult {
+  kind: string;
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  vaultId: string;
+  vaultName: string;
+  relativePath: string;
+  lineNumber?: number | null;
+  task?: ObsidianTask | null;
 }

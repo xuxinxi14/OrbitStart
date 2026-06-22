@@ -14,6 +14,7 @@ export interface OrbitItem {
   favorite?: boolean;
   launchCount: number;
   lastLaunchedAt?: string;
+  sortOrder?: number;
 }
 
 export interface OrbitItemInput {
@@ -71,6 +72,73 @@ export interface TripSearchResult {
   itemTitle: string;
   itemIcon: string;
   itemKind: ItemKind | string;
+}
+
+export type ObsidianTaskPriority = "low" | "medium" | "high";
+
+export interface ObsidianVaultConfig {
+  id: string;
+  name: string;
+  path: string;
+  enabled: boolean;
+  lastIndexedAt?: string | null;
+  fileCount: number;
+  taskCount: number;
+  openInObsidian: boolean;
+  createdAt: string;
+}
+
+export interface ObsidianNoteIndex {
+  id: string;
+  vaultId: string;
+  vaultName: string;
+  title: string;
+  filePath: string;
+  relativePath: string;
+  tags: string[];
+  frontmatter?: Record<string, string> | null;
+  modifiedAt: string;
+  indexedAt: string;
+  taskCount: number;
+  favorite: boolean;
+}
+
+export interface ObsidianTask {
+  id: string;
+  vaultId: string;
+  vaultName: string;
+  noteId: string;
+  noteTitle: string;
+  filePath: string;
+  relativePath: string;
+  lineNumber: number;
+  rawText: string;
+  text: string;
+  completed: boolean;
+  tags: string[];
+  dueDate?: string | null;
+  priority?: ObsidianTaskPriority | null;
+  completedAt?: string | null;
+  modifiedAt: string;
+}
+
+export interface ObsidianSearchResult {
+  kind: "task" | "note" | string;
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  vaultId: string;
+  vaultName: string;
+  relativePath: string;
+  lineNumber?: number | null;
+  task?: ObsidianTask | null;
+}
+
+export interface ObsidianScanResult {
+  vault: ObsidianVaultConfig;
+  noteCount: number;
+  taskCount: number;
 }
 
 export interface OrbitGroup {
@@ -148,6 +216,7 @@ export interface AppSettings {
   globalHotkey: string;
   closeBehavior?: "tray" | "exit" | string;
   dataDir: string;
+  autoPinnedMode: boolean;
 }
 
 export interface SearchResult {

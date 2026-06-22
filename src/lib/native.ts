@@ -1,6 +1,11 @@
 import { phase0Snapshot } from "../data/catalog";
 import type {
   ExportResult,
+  ObsidianNoteIndex,
+  ObsidianScanResult,
+  ObsidianSearchResult,
+  ObsidianTask,
+  ObsidianVaultConfig,
   OrbitItem,
   OrbitItemInput,
   Phase0Snapshot,
@@ -14,6 +19,9 @@ import type {
 const storageKey = "orbitstart.browser.items";
 const snapshotKey = "orbitstart.browser.snapshot";
 const tripsKey = "orbitstart.browser.trips";
+const obsidianVaultsKey = "orbitstart.browser.obsidian.vaults";
+const obsidianNotesKey = "orbitstart.browser.obsidian.notes";
+const obsidianTasksKey = "orbitstart.browser.obsidian.tasks";
 
 async function invokeNative<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const { invoke } = await import("@tauri-apps/api/core");
@@ -75,8 +83,72 @@ function writeBrowserTrips(trips: Trip[]) {
   window.localStorage.setItem(tripsKey, JSON.stringify(trips));
 }
 
+function readBrowserObsidianVaults(): ObsidianVaultConfig[] {
+  const raw = window.localStorage.getItem(obsidianVaultsKey);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as ObsidianVaultConfig[];
+  } catch {
+    return [];
+  }
+}
+
+function writeBrowserObsidianVaults(vaults: ObsidianVaultConfig[]) {
+  window.localStorage.setItem(obsidianVaultsKey, JSON.stringify(vaults));
+}
+
+function readBrowserObsidianNotes(): ObsidianNoteIndex[] {
+  const raw = window.localStorage.getItem(obsidianNotesKey);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as ObsidianNoteIndex[];
+  } catch {
+    return [];
+  }
+}
+
+function writeBrowserObsidianNotes(notes: ObsidianNoteIndex[]) {
+  window.localStorage.setItem(obsidianNotesKey, JSON.stringify(notes));
+}
+
+function readBrowserObsidianTasks(): ObsidianTask[] {
+  const raw = window.localStorage.getItem(obsidianTasksKey);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as ObsidianTask[];
+  } catch {
+    return [];
+  }
+}
+
+function writeBrowserObsidianTasks(tasks: ObsidianTask[]) {
+  window.localStorage.setItem(obsidianTasksKey, JSON.stringify(tasks));
+}
+
 function sortTrips(trips: Trip[]) {
   return trips.slice().sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt);
+}
+
+function sortObsidianTasks(tasks: ObsidianTask[]) {
+  const priorityRank: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  return tasks.slice().sort((a, b) => {
+    const dueA = a.dueDate ?? "9999-99-99";
+    const dueB = b.dueDate ?? "9999-99-99";
+    if (dueA !== dueB) return dueA.localeCompare(dueB);
+    const rankA = priorityRank[a.priority ?? ""] ?? 3;
+    const rankB = priorityRank[b.priority ?? ""] ?? 3;
+    if (rankA !== rankB) return rankA - rankB;
+    return String(b.modifiedAt).localeCompare(String(a.modifiedAt));
+  });
+}
+
+function sortObsidianNotes(notes: ObsidianNoteIndex[]) {
+  return notes.slice().sort((a, b) => {
+    if (Number(a.favorite) !== Number(b.favorite)) return Number(b.favorite) - Number(a.favorite);
+    const modified = String(b.modifiedAt).localeCompare(String(a.modifiedAt));
+    if (modified !== 0) return modified;
+    return a.title.localeCompare(b.title, "zh-Hans-CN");
+  });
 }
 
 function normalizeTripInput(input: TripInput | (TripUpdateInput & { itemId?: string })) {
@@ -227,6 +299,17 @@ export async function createGroup(title: string): Promise<Phase0Snapshot["groups
   }
 }
 
+export async function deleteGroup(id: string): Promise<Phase0Snapshot["groups"]> {
+  try {
+    return await invokeNative<Phase0Snapshot["groups"]>("delete_group", { id });
+  } catch {
+    const snapshot = readBrowserSnapshot();
+    const nextGroups = snapshot.groups.filter((group) => group.id !== id);
+    writeBrowserSnapshot({ ...snapshot, groups: nextGroups });
+    return nextGroups;
+  }
+}
+
 export async function updateItem(item: OrbitItem): Promise<OrbitItem> {
   try {
     return await invokeNative<OrbitItem>("update_item", { item });
@@ -356,6 +439,180 @@ export async function tripCountForItems(itemIds: string[]): Promise<Record<strin
   }
 }
 
+export async function pickObsidianVaultPath(): Promise<string | null> {
+  try {
+    return await invokeNative<string | null>("pick_obsidian_vault_path");
+  } catch {
+    return null;
+  }
+}
+
+export async function listObsidianVaults(): Promise<ObsidianVaultConfig[]> {
+  try {
+    return await invokeNative<ObsidianVaultConfig[]>("list_obsidian_vaults");
+  } catch {
+    return readBrowserObsidianVaults();
+  }
+}
+
+export async function addObsidianVault(path: string, name?: string): Promise<ObsidianVaultConfig> {
+  try {
+    return await invokeNative<ObsidianVaultConfig>("add_obsidian_vault", { path, name });
+  } catch {
+    const now = `${Math.floor(Date.now() / 1000)}`;
+    const cleanPath = path.trim();
+    const vault: ObsidianVaultConfig = {
+      id: `obsvault-${Date.now()}`,
+      name: name?.trim() || cleanPath.split(/[\\/]/).filter(Boolean).pop() || "Obsidian Vault",
+      path: cleanPath,
+      enabled: true,
+      lastIndexedAt: null,
+      fileCount: 0,
+      taskCount: 0,
+      openInObsidian: true,
+      createdAt: now
+    };
+    const vaults = readBrowserObsidianVaults().filter((candidate) => candidate.path !== cleanPath);
+    writeBrowserObsidianVaults([vault, ...vaults]);
+    return vault;
+  }
+}
+
+export async function removeObsidianVault(id: string): Promise<void> {
+  try {
+    await invokeNative<void>("remove_obsidian_vault", { id });
+  } catch {
+    writeBrowserObsidianVaults(readBrowserObsidianVaults().filter((vault) => vault.id !== id));
+    writeBrowserObsidianNotes(readBrowserObsidianNotes().filter((note) => note.vaultId !== id));
+    writeBrowserObsidianTasks(readBrowserObsidianTasks().filter((task) => task.vaultId !== id));
+  }
+}
+
+export async function scanObsidianVault(vaultId: string): Promise<ObsidianScanResult> {
+  try {
+    return await invokeNative<ObsidianScanResult>("scan_obsidian_vault", { vaultId });
+  } catch {
+    const vaults = readBrowserObsidianVaults();
+    const vault = vaults.find((candidate) => candidate.id === vaultId);
+    if (!vault) throw new Error(`Obsidian vault not found: ${vaultId}`);
+    const tasks = readBrowserObsidianTasks().filter((task) => task.vaultId === vaultId);
+    const scannedVault = {
+      ...vault,
+      lastIndexedAt: `${Math.floor(Date.now() / 1000)}`,
+      fileCount: vault.fileCount,
+      taskCount: tasks.length
+    };
+    writeBrowserObsidianVaults(vaults.map((candidate) => (candidate.id === vaultId ? scannedVault : candidate)));
+    return { vault: scannedVault, noteCount: scannedVault.fileCount, taskCount: tasks.length };
+  }
+}
+
+export async function listObsidianTasks(options: { includeCompleted?: boolean; query?: string } = {}): Promise<ObsidianTask[]> {
+  try {
+    return await invokeNative<ObsidianTask[]>("list_obsidian_tasks", {
+      includeCompleted: options.includeCompleted ?? false,
+      query: options.query ?? ""
+    });
+  } catch {
+    const q = (options.query ?? "").trim().toLowerCase();
+    return sortObsidianTasks(
+      readBrowserObsidianTasks()
+        .filter((task) => options.includeCompleted || !task.completed)
+        .filter((task) => {
+          if (!q) return true;
+          return `${task.text} ${task.noteTitle} ${task.relativePath} ${task.vaultName} ${task.tags.join(" ")}`.toLowerCase().includes(q);
+        })
+    );
+  }
+}
+
+export async function listObsidianNotes(options: { vaultId?: string; query?: string } = {}): Promise<ObsidianNoteIndex[]> {
+  try {
+    return await invokeNative<ObsidianNoteIndex[]>("list_obsidian_notes", {
+      vaultId: options.vaultId ?? null,
+      query: options.query ?? ""
+    });
+  } catch {
+    const q = (options.query ?? "").trim().toLowerCase();
+    const vaultId = options.vaultId && options.vaultId !== "all" ? options.vaultId : "";
+    return sortObsidianNotes(
+      readBrowserObsidianNotes()
+        .filter((note) => !vaultId || note.vaultId === vaultId)
+        .filter((note) => {
+          if (!q) return true;
+          return `${note.title} ${note.relativePath} ${note.vaultName} ${note.tags.join(" ")}`.toLowerCase().includes(q);
+        })
+    );
+  }
+}
+
+export async function toggleObsidianNoteFavorite(id: string, favorite: boolean): Promise<void> {
+  try {
+    await invokeNative<void>("toggle_obsidian_note_favorite", { id, favorite });
+  } catch {
+    writeBrowserObsidianNotes(
+      readBrowserObsidianNotes().map((note) => (note.id === id ? { ...note, favorite } : note))
+    );
+  }
+}
+
+export async function listObsidianNoteTasks(noteId: string): Promise<ObsidianTask[]> {
+  try {
+    return await invokeNative<ObsidianTask[]>("list_obsidian_note_tasks", { noteId });
+  } catch {
+    return readBrowserObsidianTasks()
+      .filter((task) => task.noteId === noteId)
+      .sort((a, b) => a.lineNumber - b.lineNumber);
+  }
+}
+
+export async function openObsidianTodoWindow(noteId: string): Promise<void> {
+  try {
+    await invokeNative<void>("open_obsidian_todo_window", { noteId });
+  } catch {
+    window.open(`?panel=todo&noteId=${encodeURIComponent(noteId)}`, "orbitstart-todo-panel", "width=520,height=720,resizable=yes");
+  }
+}
+
+export async function setTodoWindowAlwaysOnTop(enabled: boolean): Promise<void> {
+  try {
+    await invokeNative<void>("set_todo_window_always_on_top", { enabled });
+  } catch {
+    void enabled;
+  }
+}
+
+export async function toggleObsidianTaskCompletion(taskId: string): Promise<ObsidianTask> {
+  return await invokeNative<ObsidianTask>("toggle_obsidian_task_completion", { taskId });
+}
+
+export async function searchObsidian(query: string): Promise<ObsidianSearchResult[]> {
+  try {
+    return await invokeNative<ObsidianSearchResult[]>("search_obsidian", { query });
+  } catch {
+    return (await listObsidianTasks({ query })).slice(0, 25).map((task) => ({
+      kind: "task",
+      id: task.id,
+      title: task.text,
+      subtitle: `${task.vaultName} · ${task.relativePath}`,
+      icon: "NotebookText",
+      vaultId: task.vaultId,
+      vaultName: task.vaultName,
+      relativePath: task.relativePath,
+      lineNumber: task.lineNumber,
+      task
+    }));
+  }
+}
+
+export async function openObsidianNote(vaultId: string, relativePath: string, lineNumber?: number | null): Promise<string> {
+  try {
+    return await invokeNative<string>("open_obsidian_note", { vaultId, relativePath, lineNumber });
+  } catch {
+    return `本地预览模式：已模拟打开 Obsidian 笔记 ${relativePath}${lineNumber ? `:${lineNumber}` : ""}`;
+  }
+}
+
 export async function launchItem(id: string, target: string): Promise<string> {
   try {
     return await invokeNative<string>("launch_item", { id });
@@ -477,6 +734,20 @@ export async function setSafeMode(enabled: boolean): Promise<Phase0Snapshot> {
     const next = {
       ...snapshot,
       settings: { ...snapshot.settings, safeMode: enabled }
+    };
+    writeBrowserSnapshot(next);
+    return next;
+  }
+}
+
+export async function setAutoPinnedMode(enabled: boolean): Promise<Phase0Snapshot> {
+  try {
+    return await invokeNative<Phase0Snapshot>("set_auto_pinned_mode", { enabled });
+  } catch {
+    const snapshot = readBrowserSnapshot();
+    const next = {
+      ...snapshot,
+      settings: { ...snapshot.settings, autoPinnedMode: enabled }
     };
     writeBrowserSnapshot(next);
     return next;
@@ -640,5 +911,20 @@ export async function importScannedItems(items: OrbitItemInput[]): Promise<Orbit
     const nextItems = [...created, ...current];
     writeBrowserItems(nextItems);
     return nextItems;
+  }
+}
+
+export async function reorderItems(orderedIds: string[]): Promise<void> {
+  try {
+    await invokeNative<void>("reorder_items", { orderedIds });
+  } catch {
+    const items = readBrowserItems();
+    const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
+    const reordered = [...items].sort((a, b) => {
+      const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return aIdx - bIdx;
+    });
+    writeBrowserItems(reordered);
   }
 }

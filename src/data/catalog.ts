@@ -1,4 +1,4 @@
-﻿import type { AppSettings, OrbitCommand, OrbitGroup, OrbitItem, OrbitPluginManifest, Phase0Snapshot, PluginLog, ThemeManifest } from "../types";
+import type { AppSettings, OrbitCommand, OrbitGroup, OrbitItem, OrbitPluginManifest, Phase0Snapshot, PluginLog, ThemeManifest } from "../types";
 
 export const groups: OrbitGroup[] = [
   { id: "all", title: "全部", icon: "Orbit", description: "所有已索引资源" },
@@ -147,7 +147,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-command-palette",
     name: "Command Palette",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "统一命令入口、资源搜索和插件结果聚合。",
     enabled: true,
     builtin: true,
@@ -157,7 +157,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-items",
     name: "Items",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "管理应用、文件、文件夹、脚本和动作链。",
     enabled: true,
     builtin: true,
@@ -167,7 +167,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-websites",
     name: "Websites",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "网址、浏览器书签和在线控制台入口。",
     enabled: true,
     builtin: true,
@@ -177,7 +177,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-shortcuts",
     name: "Windows Shortcuts",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "扫描桌面和开始菜单快捷方式，并保留原始 .lnk 启动能力。",
     enabled: true,
     builtin: true,
@@ -190,7 +190,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-bookmarks",
     name: "Browser Bookmarks",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "从 Edge/Chrome 书签文件导入网站入口。",
     enabled: true,
     builtin: true,
@@ -200,7 +200,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-actions",
     name: "Action Chains",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "用一个入口顺序启动多个程序、文件夹和网址。",
     enabled: true,
     builtin: true,
@@ -210,7 +210,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-themes",
     name: "Themes",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "主题变量、实时预览和本地主题包。",
     enabled: true,
     builtin: true,
@@ -220,7 +220,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-backup",
     name: "Backup",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "JSON 导入导出和本地备份。",
     enabled: true,
     builtin: true,
@@ -230,7 +230,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-plugin-dev",
     name: "Plugin Dev Kit",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "本地插件模板、manifest 校验和开发文档入口。",
     enabled: true,
     builtin: true,
@@ -240,7 +240,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-clipboard",
     name: "Clipboard Quick Note",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "前端读取剪贴板文本并可作为资源备注使用。",
     enabled: true,
     builtin: true,
@@ -250,7 +250,7 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-window-switcher",
     name: "Window Switcher",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "集中管理桌面窗口导航入口。",
     enabled: true,
     builtin: true,
@@ -260,12 +260,25 @@ export const plugins: OrbitPluginManifest[] = [
   {
     id: "core-everything",
     name: "Everything Search",
-    version: "0.5.0",
+    version: "0.5.7",
     description: "提供统一的本地文件搜索入口，可连接 Everything 服务扩展索引范围。",
     enabled: true,
     builtin: true,
     permissions: [{ id: "fs:search", label: "搜索本地文件", risk: "medium" }],
     contributes: { commands: 1, searchProviders: 1, themes: 0, views: 0 }
+  },
+  {
+    id: "core-obsidian",
+    name: "Obsidian",
+    version: "0.5.7",
+    description: "只读索引本地 vault，聚合 Markdown 笔记与 checkbox 待办。",
+    enabled: true,
+    builtin: true,
+    permissions: [
+      { id: "fs:read-obsidian", label: "读取用户选择的 Obsidian vault", risk: "medium" },
+      { id: "shell:open-obsidian", label: "通过 Obsidian 协议打开笔记", risk: "medium" }
+    ],
+    contributes: { commands: 1, searchProviders: 1, themes: 0, views: 1 }
   }
 ];
 
@@ -929,7 +942,8 @@ export const settings: AppSettings = {
   density: "comfortable",
   globalHotkey: "Ctrl+Alt+Space",
   closeBehavior: "tray",
-  dataDir: "local-preview"
+  dataDir: "local-preview",
+  autoPinnedMode: false
 };
 
 export const logs: PluginLog[] = [
@@ -951,5 +965,4 @@ export const phase0Snapshot: Phase0Snapshot = {
   settings,
   logs
 };
-
 

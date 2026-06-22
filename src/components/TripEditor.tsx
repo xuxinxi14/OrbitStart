@@ -49,7 +49,7 @@ export function TripEditor({ item, trip, onSave, onCancel }: TripEditorProps) {
   };
 
   return (
-    <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true">
+    <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
       <div className="trip-editor">
         <header className="trip-editor-head">
           <div>

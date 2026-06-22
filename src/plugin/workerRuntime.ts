@@ -1,4 +1,4 @@
-import { readPluginRuntime, recordPluginRuntimeEvent, searchTrips } from "../lib/native";
+import { openObsidianNote, readPluginRuntime, recordPluginRuntimeEvent, searchObsidian, searchTrips } from "../lib/native";
 import type { OrbitPluginManifest, SearchResult } from "../types";
 import type { PluginContext, RegisteredCommand } from "./api";
 
@@ -183,6 +183,14 @@ function createPluginContext() {
       },
       open(itemId, tripId) {
         return hostRequest("trips:open", { itemId, tripId });
+      }
+    },
+    obsidian: {
+      search(query) {
+        return hostRequest("obsidian:search", { query });
+      },
+      open(vaultId, relativePath, lineNumber) {
+        return hostRequest("obsidian:open", { vaultId, relativePath, lineNumber });
       }
     }
   };
@@ -520,6 +528,7 @@ export class WorkerPluginRuntime {
     if (api.startsWith("storage:")) this.requirePermission("storage:plugin");
     if (api.startsWith("settings:")) this.requirePermission("settings:plugin");
     if (api.startsWith("trips:")) this.requirePermission("trips:read");
+    if (api.startsWith("obsidian:")) this.requirePermission("obsidian:read");
 
     if (api === "storage:get") return this.readScopedValue("storage", payload.key, payload.fallbackValue);
     if (api === "storage:set") return this.writeScopedValue("storage", payload.key, payload.value);
@@ -536,6 +545,18 @@ export class WorkerPluginRuntime {
         }
       }));
       return true;
+    }
+    if (api === "obsidian:search") return searchObsidian(String(payload.query ?? ""));
+    if (api === "obsidian:open") {
+      const vaultId = String(payload.vaultId ?? "");
+      const relativePath = String(payload.relativePath ?? "");
+      const rawLine = Number(payload.lineNumber);
+      const lineNumber = Number.isFinite(rawLine) && rawLine > 0 ? rawLine : undefined;
+      if (!vaultId || !relativePath) {
+        window.dispatchEvent(new CustomEvent("orbit-open-obsidian"));
+        return true;
+      }
+      return openObsidianNote(vaultId, relativePath, lineNumber);
     }
     throw new Error(`Unknown host API: ${api}`);
   }

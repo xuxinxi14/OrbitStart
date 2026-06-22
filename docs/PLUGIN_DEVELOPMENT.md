@@ -42,6 +42,7 @@ Add these permissions only when the plugin uses the matching API:
 - `storage:plugin`: `ctx.storage.*`
 - `settings:plugin`: `ctx.settings.*`
 - `trips:read`: `ctx.trips.search` and `ctx.trips.open`
+- `obsidian:read`: `ctx.obsidian.search` and `ctx.obsidian.open`
 
 `contributes.commands` and `contributes.searchProviders` are enforced by the
 Worker bridge as registration limits.
@@ -86,6 +87,8 @@ Implemented now:
 - toast feedback through `ctx.ui.toast`
 - plugin-scoped async settings and storage
 - Trips host bridge for searching and opening resource hint notes
+- Obsidian host bridge for searching the read-only local task index and opening
+  source notes
 - safe mode for disabling local plugins
 
 Runtime boundaries:

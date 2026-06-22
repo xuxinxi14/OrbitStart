@@ -50,6 +50,10 @@ export interface OrbitPluginContext {
     search(query: string): Promise<TripSearchResult[]>;
     open(itemId: string, tripId?: string): Promise<boolean>;
   };
+  obsidian: {
+    search(query: string): Promise<ObsidianSearchResult[]>;
+    open(vaultId: string, relativePath: string, lineNumber?: number): Promise<boolean | string>;
+  };
 }
 ```
 
@@ -67,6 +71,9 @@ ctx.storage.list()
 
 ctx.trips.search(query)
 ctx.trips.open(itemId, tripId?)
+
+ctx.obsidian.search(query)
+ctx.obsidian.open(vaultId, relativePath, lineNumber?)
 ```
 
 ## Current runtime
@@ -78,7 +85,8 @@ ctx.trips.open(itemId, tripId?)
 - Plugin event logs.
 - Isolated Web Worker execution for local plugin `main.js` or `main.ts`.
 - Worker bridge for command registration, search providers, toast feedback,
-  plugin-scoped settings, plugin-scoped storage, and Trips search/open actions.
+  plugin-scoped settings, plugin-scoped storage, Trips search/open actions, and
+  Obsidian local-index search/open actions.
 - Built-in plugins routed through the same command/search surface.
 
 ## Worker runtime boundaries
@@ -99,6 +107,8 @@ ctx.trips.open(itemId, tripId?)
 - `storage:plugin`: required for `ctx.storage.*`.
 - `settings:plugin`: required for `ctx.settings.*`.
 - `trips:read`: required for `ctx.trips.search` and `ctx.trips.open`.
+- `obsidian:read`: required for `ctx.obsidian.search` and
+  `ctx.obsidian.open`.
 - `contributes.commands`: limits how many commands the plugin can register.
 - `contributes.searchProviders`: limits how many search providers the plugin can
   register.
