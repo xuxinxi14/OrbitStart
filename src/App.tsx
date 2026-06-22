@@ -46,11 +46,13 @@ import {
   Trash2,
   Upload,
   Workflow,
-  X
+  X,
+  SlidersHorizontal
 } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay } from "@dnd-kit/core";
+import { createPortal } from "react-dom";
 import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LocalGalaxyBackdrop } from "./components/LocalGalaxyBackdrop";
@@ -114,6 +116,7 @@ import {
   setPluginEnabled,
   setSafeMode,
   setAutoPinnedMode,
+  setDisplayMode,
   toggleObsidianNoteFavorite,
   tripCountForItems,
   updateItem,
@@ -519,12 +522,16 @@ interface SortableResourceRowProps {
   openItem: (item: OrbitItem) => void;
   groups: OrbitGroup[];
   tripCounts: Record<string, number>;
+  showTripsAction: boolean;
   setTripPanelItem: (item: OrbitItem | null) => void;
   setTripPanelHighlightId: (id: string | null) => void;
   toggleFavorite: (item: OrbitItem) => void;
   setEditor: (editor: any) => void;
   removeItem: (item: OrbitItem) => void;
   resourceIconStyle: (item: OrbitItem) => React.CSSProperties;
+  isOverlay?: boolean;
+  isSimple?: boolean;
+  densityFactor?: number;
 }
 
 function SortableResourceRow({
@@ -536,39 +543,49 @@ function SortableResourceRow({
   openItem,
   groups,
   tripCounts,
+  showTripsAction,
   setTripPanelItem,
   setTripPanelHighlightId,
   toggleFavorite,
   setEditor,
   removeItem,
-  resourceIconStyle
+  resourceIconStyle,
+  isOverlay = false,
+  isSimple = false,
+  densityFactor = 0
 }: SortableResourceRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
-    disabled: batchMode,
+    disabled: batchMode || isOverlay,
   });
 
   const style = {
-    transform: transform
+    transform: isOverlay
+      ? "scale(1.04)"
+      : transform
       ? `${CSS.Transform.toString(transform)} ${isDragging ? "scale(1.04)" : ""}`
       : isDragging
       ? "scale(1.04)"
       : undefined,
-    transition,
-    opacity: isDragging ? 0.35 : undefined,
-    zIndex: isDragging ? 100 : undefined,
+    transition: isOverlay ? undefined : transition,
+    zIndex: isOverlay ? 10000 : isDragging ? 100 : undefined,
   };
+
+  const iconSize = isSimple ? (densityFactor > 0.5 ? 24 : 32) : 26;
 
   return (
     <article
       ref={setNodeRef}
       style={style}
-      className={`resource-row ${selectedIds.includes(item.id) ? "selected" : ""} ${isDragging ? "dragging" : ""}`}
+      className={`resource-row ${selectedIds.includes(item.id) ? "selected" : ""} ${
+        isDragging ? "placeholder" : isOverlay ? "dragging" : ""
+      } ${isSimple ? "simple-mode" : ""}`}
       data-resource-id={item.id}
-      {...attributes}
-      {...listeners}
+      {...(isOverlay ? {} : attributes)}
+      {...(isOverlay ? {} : listeners)}
+      onDragStart={(e: React.DragEvent) => e.preventDefault()}
     >
-      {batchMode && (
+      {batchMode && !isOverlay && (
         <label className="tile-check" onPointerDown={(e) => e.stopPropagation()}>
           <input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} />
         </label>
@@ -583,36 +600,42 @@ function SortableResourceRow({
           className="resource-icon"
           style={resourceIconStyle(item)}
         >
-          <Icon name={item.icon} size={26} />
+          <Icon name={item.icon} size={iconSize} />
         </span>
         <span className="resource-copy">
           <strong>{item.title}</strong>
-          <small>{item.subtitle || item.target}</small>
-          <span className="resource-group-tags" aria-label="资源标签">
-            {groupLabelsForItem(item, groups).map((group) => (
-              <em key={group.id}>{group.title}</em>
-            ))}
+          {!isSimple && <small>{item.subtitle || item.target}</small>}
+          {!isSimple && (
+            <span className="resource-group-tags" aria-label="资源标签">
+              {groupLabelsForItem(item, groups).map((group) => (
+                <em key={group.id} data-group-id={group.id}>{group.title}</em>
+              ))}
+            </span>
+          )}
+        </span>
+        {!isSimple && (
+          <span className="resource-meta-column">
+            <em>{item.launchCount} 次启动</em>
+            <small>{lastLaunchedText(item)}</small>
           </span>
-        </span>
-        <span className="resource-meta-column">
-          <em>{item.launchCount} 次启动</em>
-          <small>{lastLaunchedText(item)}</small>
-        </span>
+        )}
       </button>
-      {!batchMode && (
+      {!batchMode && !isSimple && !isOverlay && (
         <div className="tile-actions" onPointerDown={(e) => e.stopPropagation()}>
-          <button
-            className={`trip-action ${tripCounts[item.id] ? "has-trips" : ""}`}
-            title="Trips"
-            onClick={() => {
-              setTripPanelItem(item);
-              setTripPanelHighlightId(null);
-            }}
-            disabled={busy}
-          >
-            <Lightbulb size={15} />
-            {tripCounts[item.id] > 0 && <span className="trip-badge">{tripCounts[item.id]}</span>}
-          </button>
+          {showTripsAction && (
+            <button
+              className={`trip-action ${tripCounts[item.id] ? "has-trips" : ""}`}
+              title="Trips"
+              onClick={() => {
+                setTripPanelItem(item);
+                setTripPanelHighlightId(null);
+              }}
+              disabled={busy}
+            >
+              <Lightbulb size={15} />
+              {tripCounts[item.id] > 0 && <span className="trip-badge">{tripCounts[item.id]}</span>}
+            </button>
+          )}
           <button
             className={`favorite-action ${item.favorite ? "is-favorite" : ""}`}
             title="星标"
@@ -640,6 +663,7 @@ export default function App() {
   const isTodoPanelWindow = Boolean(initialTodoPanelPayload);
   const [items, setItems] = useState<OrbitItem[]>([]);
   const [localOrder, setLocalOrder] = useState<string[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [groups, setGroups] = useState<OrbitGroup[]>([]);
   const [commands, setCommands] = useState<OrbitCommand[]>([]);
   const [plugins, setPlugins] = useState<OrbitPluginManifest[]>([]);
@@ -669,7 +693,7 @@ export default function App() {
   const [selectedPlugin, setSelectedPlugin] = useState<OrbitPluginManifest | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartState, setAutostartState] = useState(false);
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
   const [tripCounts, setTripCounts] = useState<Record<string, number>>({});
@@ -695,7 +719,6 @@ export default function App() {
     selectedIndices: Set<number>;
     searchQuery: string;
   } | null>(null);
-  const pluginHost = useMemo(() => createOrbitPluginHost(plugins), [plugins]);
   const [pluginHostRevision, setPluginHostRevision] = useState(0);
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -704,9 +727,24 @@ export default function App() {
   const lastPointerRef = useRef({ x: 24, y: 24 });
   const dropInProgressRef = useRef(false);
 
+  const pluginStateReady = plugins.length > 0;
+  const pluginEnabled = (id: string) => plugins.some((plugin) => plugin.id === id && plugin.enabled);
+  const tripsFeatureEnabled = !pluginStateReady || pluginEnabled("trips-search");
+  const obsidianFeatureEnabled = !pluginStateReady || (pluginEnabled("core-obsidian") && pluginEnabled("obsidian-search"));
+  const effectivePlugins = useMemo(
+    () => plugins.map((plugin) => {
+      if (plugin.id === "obsidian-search" && !obsidianFeatureEnabled) {
+        return { ...plugin, enabled: false };
+      }
+      return plugin;
+    }),
+    [plugins, obsidianFeatureEnabled]
+  );
+  const pluginHost = useMemo(() => createOrbitPluginHost(effectivePlugins), [effectivePlugins]);
+
   useEffect(() => {
     if (isTauriRuntime()) {
-      void getAutostartEnabled().then(setAutostartEnabled);
+      void getAutostartEnabled().then(setAutostartState);
     }
   }, []);
 
@@ -743,12 +781,25 @@ export default function App() {
   );
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { delay: 300, tolerance: 5 },
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 8,
+      },
     })
   );
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -760,6 +811,10 @@ export default function App() {
       void debouncedReorder(next);
       return next;
     });
+  };
+
+  const handleDragCancel = () => {
+    setActiveId(null);
   };
 
   function applySnapshot(snapshot: Awaited<ReturnType<typeof loadSnapshot>>) {
@@ -816,16 +871,49 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!tripsFeatureEnabled) {
+      setTripCounts({});
+      return;
+    }
     refreshTripCounts(items).catch((error) => console.warn("Failed to load trip counts", error));
-  }, [items]);
+  }, [items, tripsFeatureEnabled]);
 
   useEffect(() => {
+    if (!tripsFeatureEnabled) {
+      setTripSearchResults([]);
+      return;
+    }
     refreshTripSearch(tripsQuery).catch((error) => console.warn("Failed to search trips", error));
-  }, [tripsQuery]);
+  }, [tripsQuery, tripsFeatureEnabled]);
 
   useEffect(() => {
+    if (!obsidianFeatureEnabled) {
+      setObsidianVaults([]);
+      setObsidianTasks([]);
+      setObsidianNotes([]);
+      return;
+    }
     refreshObsidian(obsidianQuery, activeObsidianVault).catch((error) => console.warn("Failed to load Obsidian index", error));
-  }, [obsidianQuery, activeObsidianVault]);
+  }, [obsidianQuery, activeObsidianVault, obsidianFeatureEnabled]);
+
+  useEffect(() => {
+    if (!pluginStateReady) return;
+    if (activeView === "trips" && !tripsFeatureEnabled) {
+      setActiveView("dashboard");
+      setTripPanelItem(null);
+      setTripPanelHighlightId(null);
+    }
+    if (activeView === "obsidian" && !obsidianFeatureEnabled) {
+      setActiveView("dashboard");
+    }
+  }, [activeView, pluginStateReady, tripsFeatureEnabled, obsidianFeatureEnabled]);
+
+  useEffect(() => {
+    if (!pluginStateReady) return;
+    if (settingsSection === "obsidian" && !obsidianFeatureEnabled) {
+      setSettingsSection("plugins");
+    }
+  }, [settingsSection, pluginStateReady, obsidianFeatureEnabled]);
 
   useEffect(() => {
     const onToast = (event: Event) => {
@@ -838,6 +926,10 @@ export default function App() {
 
   useEffect(() => {
     const onOpenTrip = (event: Event) => {
+      if (!tripsFeatureEnabled) {
+        setToast("Trips 插件已停用，可在插件管理中重新启用。");
+        return;
+      }
       const detail = (event as CustomEvent<{ itemId: string; tripId?: string }>).detail;
       if (!detail.itemId) {
         setActiveView("trips");
@@ -854,13 +946,18 @@ export default function App() {
     };
     window.addEventListener("orbit-open-trip", onOpenTrip);
     return () => window.removeEventListener("orbit-open-trip", onOpenTrip);
-  }, [items]);
+  }, [items, tripsFeatureEnabled]);
 
   useEffect(() => {
     const onOpenObsidian = () => {
+      if (!obsidianFeatureEnabled) {
+        setToast("Obsidian 插件已停用，可在插件管理中重新启用。");
+        return;
+      }
       setActiveView("obsidian");
     };
     const onObsidianChanged = () => {
+      if (!obsidianFeatureEnabled) return;
       void handleObsidianChanged();
     };
     window.addEventListener("orbit-open-obsidian", onOpenObsidian);
@@ -869,7 +966,7 @@ export default function App() {
       window.removeEventListener("orbit-open-obsidian", onOpenObsidian);
       window.removeEventListener("orbit://obsidian-changed", onObsidianChanged);
     };
-  }, [obsidianQuery, activeObsidianVault]);
+  }, [obsidianQuery, activeObsidianVault, obsidianFeatureEnabled]);
 
   useEffect(() => {
     if (!isTodoPanelWindow || !todoPanelPayload.noteId) return;
@@ -1091,8 +1188,6 @@ export default function App() {
     Object.entries(activeTheme.tokens).forEach(([key, value]) => root.style.setProperty(key, value));
   }, [activeTheme]);
 
-  const pluginEnabled = (id: string) => plugins.some((plugin) => plugin.id === id && plugin.enabled);
-
   const visibleKindOptions = baseKindOptions.filter((option) => !option.pluginId || pluginEnabled(option.pluginId));
 
   function itemKindAllowed(item: OrbitItem) {
@@ -1146,7 +1241,18 @@ export default function App() {
   const itemById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const itemByTarget = useMemo(() => new Map(items.map((item) => [item.target, item])), [items]);
   const enabledPlugins = plugins.filter((plugin) => plugin.enabled).length;
-  const density = settings?.density === "compact" ? "compact" : "comfortable";
+  const densityValue = useMemo(() => {
+    if (!settings?.density) return 0;
+    if (settings.density === "comfortable") return 0;
+    if (settings.density === "compact") return 100;
+    const val = parseInt(settings.density, 10);
+    return isNaN(val) ? 0 : val;
+  }, [settings?.density]);
+
+  const densityFactor = densityValue / 100;
+  const isSimple = (settings?.displayMode ?? "simple") === "simple";
+  const density = densityValue > 50 ? "compact" : "comfortable";
+
   const isLocalGalaxyTheme = activeTheme?.id === "local-galaxy";
   const themeLabel = activeTheme?.name ? activeTheme.name.toUpperCase() : "ORBITSTART";
   const galaxyAssetVars = {
@@ -1163,13 +1269,20 @@ export default function App() {
     "--asset-astrolabe": `url("${localGalaxyAssets.ornaments.astrolabe.src}")`,
     "--asset-panel-corner": `url("${localGalaxyAssets.frames.corner.src}")`
   } as CSSProperties;
-  const appShellStyle = isLocalGalaxyTheme ? galaxyAssetVars : undefined;
+
+  const appShellStyle = {
+    ...(isLocalGalaxyTheme ? galaxyAssetVars : {}),
+    "--density-factor": densityFactor.toString(),
+    "--resource-min-width": isSimple 
+      ? `${140 - densityFactor * 30}px` 
+      : `${220 - densityFactor * 30}px`,
+  } as CSSProperties;
   const activeViewMeta: Record<ViewId, { title: string; subtitle: string }> = {
     dashboard: { title: "资源中心", subtitle: "统一管理本地应用、文件、网址与自动化入口" },
     trips: { title: "Trips", subtitle: "为资源记录快捷键、流程、参数和状态提示" },
     obsidian: { title: "Obsidian", subtitle: "只读索引本地 vault，聚合笔记和 Markdown 待办" },
-    settings: { title: "设置中心", subtitle: "系统偏好、引擎、主题与数据维护" },
-    logs: { title: "运行日志", subtitle: "查看最近的引擎事件、扫描结果与系统反馈" }
+    settings: { title: "设置中心", subtitle: "系统偏好、插件、主题与数据维护" },
+    logs: { title: "运行日志", subtitle: "查看最近的插件事件、扫描结果与系统反馈" }
   };
 
   function iconBaseFor(item: OrbitItem) {
@@ -1384,16 +1497,20 @@ export default function App() {
       setToast("默认分组不可删除");
       return;
     }
-    const affected = items.filter((item) => item.group === groupId).length;
+    const affected = items.filter((item) => itemHasGroup(item, groupId)).length;
     setBusy(true);
     try {
       const nextGroups = await deleteGroup(groupId);
       setGroups(nextGroups);
       if (activeGroup === groupId) setActiveGroup("all");
       await reload();
-      setToast(affected > 0 ? `已删除分组「${group.title}」，${affected} 个资源已迁移到"全部"` : `已删除分组「${group.title}」`);
+      setToast(
+        affected > 0
+          ? `\u5df2\u5220\u9664\u6807\u7b7e\u201c${group.title}\u201d\uff0c\u5e76\u4ece ${affected} \u4e2a\u8d44\u6e90\u4e2d\u79fb\u9664\u8be5\u6807\u7b7e`
+          : `\u5df2\u5220\u9664\u6807\u7b7e\u201c${group.title}\u201d`
+      );
     } catch (error) {
-      setToast(`删除分组失败：${String(error)}`);
+      setToast(`\u5220\u9664\u6807\u7b7e\u5931\u8d25\uff1a${String(error)}`);
     } finally {
       setBusy(false);
     }
@@ -1627,14 +1744,55 @@ export default function App() {
     }
   }
 
-  async function changeDensity(next: "comfortable" | "compact") {
+  async function changeDensity(next: "comfortable" | "compact" | string) {
     setBusy(true);
     try {
       const snapshot = await setDensity(next);
       applySnapshot(snapshot);
-      setToast(`密度已切换：${next}`);
+      setToast(`密度已切换`);
     } catch (error) {
       setToast(`密度切换失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const debouncedSetDensity = useMemo(() => {
+    let timer: any = null;
+    return (value: string) => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          const snapshot = await setDensity(value);
+          setItems(snapshot.items);
+          setGroups(snapshot.groups);
+          setCommands(snapshot.commands);
+          setPlugins(snapshot.plugins);
+          setThemes(snapshot.themes);
+          setSettings((prev) => prev ? { ...snapshot.settings, density: prev.density } : snapshot.settings);
+        } catch (error) {
+          console.error("Failed to persist density:", error);
+        }
+      }, 150);
+    };
+  }, []);
+
+  const handleDensityChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const val = event.target.value;
+    if (settings) {
+      setSettings({ ...settings, density: val });
+    }
+    debouncedSetDensity(val);
+  };
+
+  async function changeDisplayMode(mode: "simple" | "detailed") {
+    setBusy(true);
+    try {
+      const snapshot = await setDisplayMode(mode);
+      applySnapshot(snapshot);
+      setToast(`显示模式已应用：${mode === "simple" ? "简约模式" : "详细模式"}`);
+    } catch (error) {
+      setToast(`显示模式切换失败：${String(error)}`);
     } finally {
       setBusy(false);
     }
@@ -1687,11 +1845,11 @@ export default function App() {
   }
 
   async function toggleAutostart() {
-    const next = !autostartEnabled;
+    const next = !autostartState;
     setBusy(true);
     try {
       await setAutostartEnabled(next);
-      setAutostartEnabled(next);
+      setAutostartState(next);
       setToast(next ? "开机自启动已启用" : "开机自启动已禁用");
     } catch (error) {
       setToast(`设置自启动失败：${String(error)}`);
@@ -1853,8 +2011,8 @@ export default function App() {
 
   const navItems: Array<{ id: ViewId; title: string; icon: JSX.Element }> = [
     { id: "dashboard", title: "工作台", icon: <LayoutDashboard size={21} /> },
-    { id: "trips", title: "Trips", icon: <Lightbulb size={21} /> },
-    { id: "obsidian", title: "Obsidian", icon: <NotebookText size={21} /> },
+    ...(tripsFeatureEnabled ? [{ id: "trips" as const, title: "Trips", icon: <Lightbulb size={21} /> }] : []),
+    ...(obsidianFeatureEnabled ? [{ id: "obsidian" as const, title: "Obsidian", icon: <NotebookText size={21} /> }] : []),
     { id: "settings", title: "设置", icon: <Settings size={21} /> },
     { id: "logs", title: "日志", icon: <Database size={21} /> }
   ];
@@ -1871,6 +2029,10 @@ export default function App() {
   };
 
   function handleAppContextMenu(event: ReactMouseEvent<HTMLElement>) {
+    if (activeId) {
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const nativeEvent = event.nativeEvent;
@@ -2127,7 +2289,7 @@ export default function App() {
           <em>本地入口与链接</em>
         </article>
         <article className="kpi-card">
-          <span>启用引擎</span>
+          <span>启用插件</span>
           <strong>{enabledPlugins}</strong>
           <em>{plugins.length} 个可用模块</em>
         </article>
@@ -2181,8 +2343,14 @@ export default function App() {
             </div>
           )}
 
-          <div className="resource-list">
-            <DndContext sensors={batchMode ? [] : sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <div className={`resource-list display-${settings?.displayMode ?? "simple"}`}>
+            <DndContext
+              sensors={batchMode ? [] : sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
+            >
               <SortableContext items={localOrder} strategy={rectSortingStrategy}>
                 {filteredItems.map((item) => (
                   <SortableResourceRow
@@ -2195,15 +2363,49 @@ export default function App() {
                     openItem={openItem}
                     groups={groups}
                     tripCounts={tripCounts}
+                    showTripsAction={tripsFeatureEnabled}
                     setTripPanelItem={setTripPanelItem}
                     setTripPanelHighlightId={setTripPanelHighlightId}
                     toggleFavorite={toggleFavorite}
                     setEditor={setEditor}
                     removeItem={removeItem}
                     resourceIconStyle={resourceIconStyle}
+                    isSimple={isSimple}
+                    densityFactor={densityFactor}
                   />
                 ))}
               </SortableContext>
+              {createPortal(
+                <DragOverlay>
+                  {activeId ? (() => {
+                    const activeItem = itemById.get(activeId);
+                    if (!activeItem) return null;
+                    return (
+                      <SortableResourceRow
+                        item={activeItem}
+                        selectedIds={selectedIds}
+                        batchMode={batchMode}
+                        busy={busy}
+                        toggleSelected={toggleSelected}
+                        openItem={openItem}
+                        groups={groups}
+                        tripCounts={tripCounts}
+                        showTripsAction={tripsFeatureEnabled}
+                        setTripPanelItem={setTripPanelItem}
+                        setTripPanelHighlightId={setTripPanelHighlightId}
+                        toggleFavorite={toggleFavorite}
+                        setEditor={setEditor}
+                        removeItem={removeItem}
+                        resourceIconStyle={resourceIconStyle}
+                        isOverlay={true}
+                        isSimple={isSimple}
+                        densityFactor={densityFactor}
+                      />
+                    );
+                  })() : null}
+                </DragOverlay>,
+                document.body
+              )}
             </DndContext>
             {filteredItems.length === 0 && (
               <div className="empty-state">
@@ -2223,7 +2425,7 @@ export default function App() {
             <div>
               <p>系统状态</p>
               <strong>工作台运行正常</strong>
-              <span>所有核心引擎已就绪</span>
+              <span>所有核心插件已就绪</span>
             </div>
           </section>
 
@@ -2341,8 +2543,8 @@ export default function App() {
       <div className="setting-card wide-card">
         <div className="section-head">
           <div>
-            <p className="eyebrow">Engines</p>
-            <h2>引擎管理</h2>
+            <p className="eyebrow">Plugins</p>
+            <h2>插件管理</h2>
           </div>
           <button className="secondary-action" onClick={toggleSafeMode} disabled={busy}>
             <ShieldAlert size={17} />
@@ -2361,7 +2563,7 @@ export default function App() {
                   <em key={permission.id} className={`risk-${permission.risk}`}>{permission.label}</em>
                 ))}
               </div>
-              <small>{plugin.builtin ? "核心引擎" : "本地引擎"} · v{plugin.version}</small>
+              <small>{plugin.builtin ? "核心插件" : "本地插件"} · v{plugin.version}</small>
               <div className="plugin-actions">
                 <button className="secondary-action compact-action" onClick={() => setSelectedPlugin(plugin)}>
                   详情
@@ -2378,7 +2580,7 @@ export default function App() {
       <div className="setting-card info-card">
         <p className="eyebrow">Behavior</p>
         <h2>即时生效</h2>
-        <p>停用网址引擎后，相关分组和资源会从界面隐藏，数据仍保留在本地数据库中。</p>
+        <p>停用网址插件后，相关分组和资源会从界面隐藏，数据仍保留在本地数据库中。</p>
         <button className="wide-command" onClick={() => setActiveGroup("web")}>
           <Globe size={17} />
           <span>检查网址分组</span>
@@ -2428,10 +2630,6 @@ export default function App() {
               <p className="eyebrow">Theme</p>
               <h2>{activeTheme?.name ?? "未选择主题"}</h2>
             </div>
-            <button className="secondary-action" onClick={() => changeDensity(density === "comfortable" ? "compact" : "comfortable")} disabled={busy}>
-              <Grid3X3 size={17} />
-              {density === "comfortable" ? "紧凑模式" : "舒适模式"}
-            </button>
           </div>
           <div className="theme-group-container">
             <h3 className="theme-group-title">高级主题</h3>
@@ -2465,15 +2663,15 @@ export default function App() {
     <section className="settings-page-grid dev-settings">
       <div className="setting-card">
         <p className="eyebrow">Development</p>
-        <h2>引擎开发工具</h2>
-        <p>创建标准引擎包结构，接入命令注册、搜索提供者、桌面通知等核心能力。</p>
+        <h2>插件开发工具</h2>
+        <p>创建标准插件包结构，接入命令注册、搜索提供者、桌面通知等核心能力。</p>
         <button className="wide-command" onClick={createTemplate} disabled={busy}>
           <FileCode2 size={17} />
-          <span>创建引擎模板</span>
+          <span>创建插件模板</span>
         </button>
         <button className="wide-command" onClick={openDataDir}>
           <FolderOpen size={17} />
-          <span>打开引擎目录</span>
+          <span>打开插件目录</span>
         </button>
       </div>
       <div className="setting-card">
@@ -2654,7 +2852,7 @@ export default function App() {
               <em>{lastLaunchedText({ lastLaunchedAt: log.createdAt } as OrbitItem)}</em>
             </article>
           ))}
-          {logs.length === 0 && <p className="empty-copy">暂无引擎日志。</p>}
+          {logs.length === 0 && <p className="empty-copy">暂无插件日志。</p>}
         </div>
       </div>
     </section>
@@ -2667,13 +2865,6 @@ export default function App() {
         <h2>通用配置</h2>
         <p>控制界面密度、全局热键与插件安全策略。</p>
         <div className="setting-list">
-          <label>
-            显示密度
-            <select value={density} onChange={(event) => changeDensity(event.target.value as "comfortable" | "compact")}>
-              <option value="comfortable">舒适</option>
-              <option value="compact">紧凑</option>
-            </select>
-          </label>
           <label>
             全局热键
             <div className="hotkey-input-container">
@@ -2715,7 +2906,7 @@ export default function App() {
           </label>
           {isTauriRuntime() && (
             <label className="setting-inline">
-              <input type="checkbox" checked={autostartEnabled} onChange={toggleAutostart} />
+              <input type="checkbox" checked={autostartState} onChange={toggleAutostart} />
               开机自启动
             </label>
           )}
@@ -2733,6 +2924,13 @@ export default function App() {
           <label className="setting-inline">
             <input type="checkbox" checked={Boolean(settings?.autoPinnedMode)} onChange={toggleAutoPinnedMode} />
             自动置顶模式
+          </label>
+          <label>
+            资源卡片显示模式
+            <select value={settings?.displayMode === "detailed" ? "detailed" : "simple"} onChange={(event) => changeDisplayMode(event.target.value as "simple" | "detailed")}>
+              <option value="simple">简约模式</option>
+              <option value="detailed">详细模式</option>
+            </select>
           </label>
           <button className="wide-command" onClick={addCustomGroup}>
             <PlusCircle size={17} />
@@ -2752,7 +2950,7 @@ export default function App() {
       <div className="setting-card wide-card">
         <p className="eyebrow">Data</p>
         <h2>数据目录</h2>
-        <p>OrbitStart 的数据库、引擎、主题与备份文件都存储在本地。</p>
+        <p>OrbitStart 的数据库、插件、主题与备份文件都存储在本地。</p>
         <div className="path-list">
           <code>{settings?.dataDir ?? "loading"}\\orbit.db</code>
           <code>{settings?.dataDir ?? "loading"}\\plugins</code>
@@ -2788,9 +2986,9 @@ export default function App() {
         <p>原创 Windows 启动工作台，面向本地应用、文件、网址、脚本和插件入口的统一管理。</p>
         <div className="about-stats">
           <span><strong>{items.length}</strong>资源</span>
-          <span><strong>{enabledPlugins}</strong>启用引擎</span>
+          <span><strong>{enabledPlugins}</strong>启用插件</span>
           <span><strong>{themes.length}</strong>主题</span>
-          <span><strong>0.5.5</strong>版本</span>
+          <span><strong>0.5.8</strong>版本</span>
         </div>
       </div>
       <div className="setting-card">
@@ -2856,9 +3054,9 @@ export default function App() {
   const renderSettings = () => {
     const sections: Array<{ id: SettingsSection; title: string; icon: JSX.Element }> = [
       { id: "general", title: "基础设置", icon: <Settings size={18} /> },
-      { id: "plugins", title: "引擎管理", icon: <Blocks size={18} /> },
+      { id: "plugins", title: "插件管理", icon: <Blocks size={18} /> },
       { id: "themes", title: "主题工作室", icon: <Palette size={18} /> },
-      { id: "obsidian", title: "Obsidian", icon: <NotebookText size={18} /> },
+      ...(obsidianFeatureEnabled ? [{ id: "obsidian" as const, title: "Obsidian", icon: <NotebookText size={18} /> }] : []),
       { id: "dev", title: "开发套件", icon: <Hammer size={18} /> },
       { id: "data", title: "数据备份", icon: <Database size={18} /> },
       { id: "about", title: "关于", icon: <Info size={18} /> }
@@ -2878,7 +3076,7 @@ export default function App() {
           {settingsSection === "general" && renderGeneralSettings()}
           {settingsSection === "plugins" && renderPlugins()}
           {settingsSection === "themes" && renderThemes()}
-          {settingsSection === "obsidian" && renderObsidianSettings()}
+          {settingsSection === "obsidian" && obsidianFeatureEnabled && renderObsidianSettings()}
           {settingsSection === "dev" && renderDev()}
           {settingsSection === "data" && renderDataSettings()}
           {settingsSection === "about" && renderAbout()}
@@ -3052,7 +3250,7 @@ export default function App() {
           <div className="modal-head">
             <div>
               <p className="eyebrow">Plugin template</p>
-              <h2>创建引擎模板</h2>
+              <h2>创建插件模板</h2>
             </div>
             <button type="button" className="icon-action" onClick={() => setDialog(null)}>
               <X size={18} />
@@ -3133,19 +3331,19 @@ export default function App() {
           if (!targetGroup) return null;
           return (
             <>
-              <button type="button" onClick={() => { setActiveGroup(targetGroup.id); setContextMenu(null); }}>切换到此分组</button>
-              {targetGroup.custom && (
-                <>
-                  <span className="context-separator" />
-                  <button
-                    type="button"
-                    className="context-danger"
-                    onClick={() => { void removeGroup(targetGroup.id); setContextMenu(null); }}
-                    disabled={busy}
-                  >
-                    删除分组「{targetGroup.title}」
-                  </button>
-                </>
+              <button type="button" onClick={() => { setActiveGroup(targetGroup.id); setContextMenu(null); }}>{"\u5207\u6362\u5230\u6b64\u6807\u7b7e"}</button>
+              <span className="context-separator" />
+              {targetGroup.custom ? (
+                <button
+                  type="button"
+                  className="context-danger"
+                  onClick={() => { void removeGroup(targetGroup.id); setContextMenu(null); }}
+                  disabled={busy}
+                >
+                  {`\u5220\u9664\u6807\u7b7e\u201c${targetGroup.title}\u201d`}
+                </button>
+              ) : (
+                <button type="button" disabled>{"\u5185\u7f6e\u6807\u7b7e\u4e0d\u53ef\u5220\u9664"}</button>
               )}
             </>
           );
@@ -3641,9 +3839,17 @@ export default function App() {
             <span className="title-subtitle">{activeViewMeta[activeView].subtitle}</span>
           </div>
           <div className="top-actions">
-            <button type="button" className="icon-action" title="切换密度" onClick={() => changeDensity(density === "comfortable" ? "compact" : "comfortable")}>
-              <Grid3X3 size={19} />
-            </button>
+            <div className="density-slider-container" title={`界面密度: ${densityValue}%`}>
+              <SlidersHorizontal size={15} className="density-slider-icon" />
+              <input
+                type="range"
+                className="density-slider"
+                min="0"
+                max="100"
+                value={densityValue}
+                onChange={handleDensityChange}
+              />
+            </div>
             <button type="button" className="icon-action" title="扫描本地程序" onClick={() => runNativeItemScan("shortcuts")} disabled={busy || !pluginEnabled("core-shortcuts")}>
               <ScanSearch size={19} />
             </button>
@@ -3656,7 +3862,7 @@ export default function App() {
           </div>
         </header>
 
-        {(activeView === "dashboard" || activeView === "trips" || activeView === "obsidian") && (
+        {(activeView === "dashboard" || (activeView === "trips" && tripsFeatureEnabled) || (activeView === "obsidian" && obsidianFeatureEnabled)) && (
           <section className="hero-strip">
             <div className="search-shell">
               <Search size={19} />
@@ -3699,8 +3905,8 @@ export default function App() {
         )}
 
         {activeView === "dashboard" && renderDashboard()}
-        {activeView === "trips" && renderTripsPage()}
-        {activeView === "obsidian" && renderObsidianPage()}
+        {activeView === "trips" && tripsFeatureEnabled && renderTripsPage()}
+        {activeView === "obsidian" && obsidianFeatureEnabled && renderObsidianPage()}
         {activeView === "settings" && renderSettings()}
         {activeView === "logs" && renderLogs()}
       </section>
@@ -3717,7 +3923,7 @@ export default function App() {
 
       {dialog && renderAppDialog()}
 
-      {tripPanelItem && (
+      {tripsFeatureEnabled && tripPanelItem && (
         <TripPanel
           item={tripPanelItem}
           highlightTripId={tripPanelHighlightId}
@@ -4054,7 +4260,7 @@ export default function App() {
             <div className="modal-head">
               <div>
                 <p className="eyebrow">{localAuxPanel === "plugins" ? "Plugins" : localAuxPanel === "themes" ? "Themes" : localAuxPanel === "about" ? "About" : "Settings"}</p>
-                <h2>{localAuxPanel === "plugins" ? "插件管理" : localAuxPanel === "themes" ? "主题工作室" : localAuxPanel === "about" ? "关于 OrbitStart" : "轨道控制"}</h2>
+                <h2>{localAuxPanel === "plugins" ? "插件管理" : localAuxPanel === "themes" ? "主题工作室" : localAuxPanel === "about" ? "关于 OrbitStart" : "系统设置"}</h2>
               </div>
               <button type="button" className="icon-action" onClick={() => setLocalAuxPanel(null)}>
                 <X size={18} />

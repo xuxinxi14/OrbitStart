@@ -305,7 +305,22 @@ export async function deleteGroup(id: string): Promise<Phase0Snapshot["groups"]>
   } catch {
     const snapshot = readBrowserSnapshot();
     const nextGroups = snapshot.groups.filter((group) => group.id !== id);
-    writeBrowserSnapshot({ ...snapshot, groups: nextGroups });
+    const fallbackGroupForKind = (kind: string) => {
+      if (kind === "app") return "apps";
+      if (kind === "website") return "web";
+      if (kind === "script") return "scripts";
+      return "work";
+    };
+    const nextItems = snapshot.items.map((item) => {
+      const currentGroups = item.group.split(",").map((group) => group.trim()).filter(Boolean);
+      if (!currentGroups.includes(id)) return item;
+      const nextItemGroups = currentGroups.filter((group) => group !== id);
+      return {
+        ...item,
+        group: nextItemGroups.length ? Array.from(new Set(nextItemGroups)).join(",") : fallbackGroupForKind(item.kind)
+      };
+    });
+    writeBrowserSnapshot({ ...snapshot, groups: nextGroups, items: nextItems });
     return nextGroups;
   }
 }
@@ -748,6 +763,20 @@ export async function setAutoPinnedMode(enabled: boolean): Promise<Phase0Snapsho
     const next = {
       ...snapshot,
       settings: { ...snapshot.settings, autoPinnedMode: enabled }
+    };
+    writeBrowserSnapshot(next);
+    return next;
+  }
+}
+
+export async function setDisplayMode(mode: "simple" | "detailed"): Promise<Phase0Snapshot> {
+  try {
+    return await invokeNative<Phase0Snapshot>("set_display_mode", { mode });
+  } catch {
+    const snapshot = readBrowserSnapshot();
+    const next = {
+      ...snapshot,
+      settings: { ...snapshot.settings, displayMode: mode }
     };
     writeBrowserSnapshot(next);
     return next;

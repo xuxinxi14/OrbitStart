@@ -43,8 +43,8 @@ export function contextMenuFromEvent(event: MenuPointerEvent, fallback: ContextM
   const groupId = groupIdFromTarget(event.target);
   const position = clampedMenuPosition(event.clientX, event.clientY, resourceId ? 246 : 230, isEditableElement(event.target) ? 172 : 318);
   if (isEditableElement(event.target)) return { kind: "edit", ...position };
-  if (resourceId) return { kind: "resource", resourceId, ...position };
   if (groupId) return { kind: "group", groupId, ...position };
+  if (resourceId) return { kind: "resource", resourceId, ...position };
   return { kind: fallback, ...position };
 }
 

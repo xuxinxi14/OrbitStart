@@ -217,6 +217,7 @@ export interface AppSettings {
   closeBehavior?: "tray" | "exit" | string;
   dataDir: string;
   autoPinnedMode: boolean;
+  displayMode: "simple" | "detailed" | string;
 }
 
 export interface SearchResult {

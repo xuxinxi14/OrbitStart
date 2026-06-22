@@ -87,6 +87,7 @@ async function setInitialTheme(page, themeId: string) {
     }
     snapshot.settings = snapshot.settings || {};
     snapshot.settings.activeThemeId = tId;
+    snapshot.settings.displayMode = 'detailed';
     window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
     window.localStorage.setItem('orbitstart_onboarding_v1', JSON.stringify({ completed: true }));
   }, themeId);
@@ -97,8 +98,22 @@ async function setInitialTheme(page, themeId: string) {
 test.describe('Atelier Zero Theme E2E Tests', () => {
 
   test.beforeEach(async ({ page }) => {
-    // Navigate to dashboard
+    // Navigate to dashboard and ensure displayMode is detailed for E2E testing
     await page.goto('/');
+    await page.evaluate(() => {
+      const storageKey = 'orbitstart.browser.snapshot';
+      const raw = window.localStorage.getItem(storageKey);
+      let snapshot: any = {};
+      if (raw) {
+        try {
+          snapshot = JSON.parse(raw);
+        } catch (e) {}
+      }
+      snapshot.settings = snapshot.settings || {};
+      snapshot.settings.displayMode = 'detailed';
+      window.localStorage.setItem(storageKey, JSON.stringify(snapshot));
+    });
+    await page.reload();
     await page.waitForSelector('.app-shell', { timeout: 10000 });
   });
 
@@ -341,7 +356,7 @@ test.describe('Atelier Zero Theme E2E Tests', () => {
         // Click settings rail button
         const settingsButton = page.locator('.rail-button[title="设置"], button:has-text("设置"), button:has(.lucide-Settings)').first();
         await settingsButton.click();
-        await expect(page.locator('.modal-panel .modal-head h2')).toHaveText('轨道控制');
+        await expect(page.locator('.modal-panel .modal-head h2')).toHaveText('系统设置');
 
         // Click close button on modal header to close
         const closeButton = page.locator('.modal-panel .modal-head button.icon-action').first();

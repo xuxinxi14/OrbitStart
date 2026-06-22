@@ -943,7 +943,8 @@ export const settings: AppSettings = {
   globalHotkey: "Ctrl+Alt+Space",
   closeBehavior: "tray",
   dataDir: "local-preview",
-  autoPinnedMode: false
+  autoPinnedMode: false,
+  displayMode: "simple"
 };
 
 export const logs: PluginLog[] = [

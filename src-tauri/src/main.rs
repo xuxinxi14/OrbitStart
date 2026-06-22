@@ -153,6 +153,7 @@ struct AppSettings {
     close_behavior: String,
     data_dir: String,
     auto_pinned_mode: bool,
+    display_mode: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -544,6 +545,7 @@ fn ensure_default_settings(conn: &Connection) -> Result<(), String> {
         ("global_hotkey", "Ctrl+Alt+Space"),
         ("close_behavior", "tray"),
         ("auto_pinned_mode", "false"),
+        ("display_mode", "simple"),
     ] {
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?1, ?2)",
@@ -584,6 +586,7 @@ fn app_settings(conn: &Connection) -> Result<AppSettings, String> {
         close_behavior: setting(conn, "close_behavior", "tray")?,
         data_dir: app_data_dir()?.to_string_lossy().to_string(),
         auto_pinned_mode: setting(conn, "auto_pinned_mode", "false")? == "true",
+        display_mode: setting(conn, "display_mode", "simple")?,
     })
 }
 
@@ -2753,7 +2756,8 @@ fn reorder_items(app: tauri::AppHandle, ordered_ids: Vec<String>) -> Result<(), 
         )
         .map_err(|error| format!("Failed to update sort order of item {id}: {error}"))?;
     }
-    tx.commit().map_err(|error| format!("Failed to commit transaction: {error}"))?;
+    tx.commit()
+        .map_err(|error| format!("Failed to commit transaction: {error}"))?;
     let _ = app.emit("orbit://refresh-resources", ());
     Ok(())
 }
@@ -3581,9 +3585,13 @@ fn list_obsidian_note_tasks(note_id: String) -> Result<Vec<ObsidianTask>, String
 }
 
 #[tauri::command]
-fn toggle_obsidian_task_completion(app: tauri::AppHandle, task_id: String) -> Result<ObsidianTask, String> {
+fn toggle_obsidian_task_completion(
+    app: tauri::AppHandle,
+    task_id: String,
+) -> Result<ObsidianTask, String> {
     let conn = open_db()?;
-    let task = get_obsidian_task(&conn, &task_id)?.ok_or_else(|| "Obsidian task not found".to_string())?;
+    let task =
+        get_obsidian_task(&conn, &task_id)?.ok_or_else(|| "Obsidian task not found".to_string())?;
     let new_completed = !task.completed;
     let file_path = PathBuf::from(&task.file_path);
 
@@ -3621,7 +3629,8 @@ fn toggle_obsidian_task_completion(app: tauri::AppHandle, task_id: String) -> Re
     ).map_err(|error| format!("Failed to update task completion status: {error}"))?;
 
     // Return updated task
-    let updated = get_obsidian_task(&conn, &task_id)?.ok_or_else(|| "Task not found after update".to_string())?;
+    let updated = get_obsidian_task(&conn, &task_id)?
+        .ok_or_else(|| "Task not found after update".to_string())?;
 
     // Emit change event
     let _ = app.emit("orbit://obsidian-changed", ());
@@ -3915,16 +3924,51 @@ fn create_group(app: tauri::AppHandle, title: String) -> Result<Vec<OrbitGroup>,
 #[tauri::command]
 fn delete_group(app: tauri::AppHandle, id: String) -> Result<Vec<OrbitGroup>, String> {
     let conn = open_db()?;
-    // Only custom groups can be deleted.
     let custom: i64 = conn
-        .query_row("SELECT custom FROM groups WHERE id = ?1", params![&id], |row| row.get(0))
+        .query_row(
+            "SELECT custom FROM groups WHERE id = ?1",
+            params![&id],
+            |row| row.get(0),
+        )
         .map_err(|error| format!("Failed to check group: {error}"))?;
     if custom == 0 {
-        return Err("默认分组不可删除".to_string());
+        return Err("Built-in groups cannot be deleted".to_string());
     }
-    // Migrate items in this group to "all" before deleting.
-    conn.execute("UPDATE items SET group_id = 'all', updated_at = ?2 WHERE group_id = ?1", params![&id, now_string()])
-        .map_err(|error| format!("Failed to migrate items: {error}"))?;
+
+    let mut stmt = conn
+        .prepare("SELECT id, kind, group_id FROM items")
+        .map_err(|error| format!("Failed to prepare item group cleanup: {error}"))?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            ))
+        })
+        .map_err(|error| format!("Failed to query item groups: {error}"))?;
+    let now = now_string();
+    for row in rows {
+        let (item_id, kind, group_value) =
+            row.map_err(|error| format!("Failed to map item group cleanup: {error}"))?;
+        let current_groups = split_group_ids(&group_value);
+        if !current_groups.iter().any(|group_id| group_id == &id) {
+            continue;
+        }
+        let mut next_groups = current_groups
+            .into_iter()
+            .filter(|group_id| group_id != &id)
+            .collect::<Vec<_>>();
+        if next_groups.is_empty() {
+            next_groups.push(default_group_for_kind(&kind).to_string());
+        }
+        conn.execute(
+            "UPDATE items SET group_id = ?2, updated_at = ?3 WHERE id = ?1",
+            params![item_id, next_groups.join(","), &now],
+        )
+        .map_err(|error| format!("Failed to remove group from item: {error}"))?;
+    }
+
     conn.execute("DELETE FROM groups WHERE id = ?1", params![&id])
         .map_err(|error| format!("Failed to delete group: {error}"))?;
     let _ = app.emit("orbit://refresh-resources", ());
@@ -4535,7 +4579,19 @@ fn set_safe_mode(app: tauri::AppHandle, enabled: bool) -> Result<CatalogSnapshot
 #[tauri::command]
 fn set_auto_pinned_mode(app: tauri::AppHandle, enabled: bool) -> Result<CatalogSnapshot, String> {
     let conn = open_db()?;
-    set_setting_value(&conn, "auto_pinned_mode", if enabled { "true" } else { "false" })?;
+    set_setting_value(
+        &conn,
+        "auto_pinned_mode",
+        if enabled { "true" } else { "false" },
+    )?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    catalog_snapshot()
+}
+
+#[tauri::command]
+fn set_display_mode(app: tauri::AppHandle, mode: String) -> Result<CatalogSnapshot, String> {
+    let conn = open_db()?;
+    set_setting_value(&conn, "display_mode", &mode)?;
     let _ = app.emit("orbit://refresh-resources", ());
     catalog_snapshot()
 }
@@ -5425,6 +5481,7 @@ pub fn run() {
             set_close_behavior,
             set_safe_mode,
             set_auto_pinned_mode,
+            set_display_mode,
             read_plugin_runtime,
             record_plugin_runtime_event,
             export_catalog_json,
