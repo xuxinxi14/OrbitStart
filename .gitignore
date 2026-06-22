@@ -35,6 +35,13 @@ orbitstart-video/
 *.mp4
 *.mov
 *.m4v
+*.mkv
+*.avi
+*.wmv
+*.flv
+*.ogv
+*.mpeg
+*.mpg
 
 # Logs and crash dumps
 *.log
@@ -74,6 +81,7 @@ coverage/
 # Local agent workspaces (AI assistants)
 .agents/
 .claude/
+.codex/
 .workbuddy/
 .cursor/
 .aider*

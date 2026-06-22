@@ -163,7 +163,7 @@ type TodoPanelPayload = {
   relativePath?: string;
   title?: string;
 };
-type ImportFilterCode = "uninstall" | "help" | "developer" | "system" | "auxiliary" | "duplicate";
+type ImportFilterCode = "uninstall" | "help" | "developer" | "system" | "auxiliary" | "script" | "duplicate";
 type ImportFilterReason = {
   code: ImportFilterCode;
   label: string;
@@ -215,6 +215,7 @@ const importFilterLabels: Record<ImportFilterCode, string> = {
   developer: "开发/终端工具",
   system: "系统管理工具",
   auxiliary: "辅助组件",
+  script: "脚本入口",
   duplicate: "重复入口"
 };
 
@@ -225,19 +226,19 @@ const importFilterRules: Array<{ code: Exclude<ImportFilterCode, "duplicate">; p
   },
   {
     code: "help",
-    pattern: /\b(help|documentation|manual|readme|guide|tutorial|examples?|sample|samples|docs?|user guide|getting started|release notes|what'?s new|license|licence|changelog)\b|帮助|文档|说明|示例|手册|教程/
+    pattern: /\b(faq|help|documentation|manual|readme|guide|tutorial|examples?|sample|samples|docs?|user guide|getting started|revision history|release history|release notes|what'?s new|whatsnew|license|licence|changelog)\b|帮助|文档|说明|示例|手册|教程|常见问题|更新历史/
   },
   {
     code: "developer",
-    pattern: /\b(developer|debug|debuggable|sdk|compiler|command prompt|powershell|terminal|console|shell|cmd|visual studio.*tools|native tools|package manager|nuget|git bash|node\.js command prompt|x64 native|x86 native|cross tools)\b|开发者|调试|编译器|命令提示符|终端/
+    pattern: /\b(application verifier|appverif|developer|debug|debuggable|sdk|windows kits?|compiler|command prompt|powershell|terminal|console|shell|cmd|visual studio.*tools|native tools|package manager|nuget|git bash|node\.js command prompt|x64 native|x86 native|cross tools|rtools|msys2?|mingw|ucrt64|bash|nvidia nsight|nsight|ncu-ui|nsys-ui|profiler|redistributable|tools for desktop apps|tools for uwp apps)\b|开发者|调试|编译器|命令提示符|终端/
   },
   {
     code: "system",
-    pattern: /\b(disk defragmenter|defragment|dfrgui|event viewer|services|registry editor|regedit|odbc|component services|computer management|device manager|task scheduler|windows tools|system information|performance monitor|resource monitor|print management|memory diagnostic|recovery drive)\b|磁盘碎片整理|事件查看器|注册表|任务计划|设备管理/
+    pattern: /\b(disk defragmenter|defragment|dfrgui|event viewer|services|registry editor|regedit|odbc|component services|computer management|device manager|task scheduler|windows tools|system information|performance monitor|resource monitor|print management|memory diagnostic|recovery drive|recoverydrive)\b|磁盘碎片整理|事件查看器|注册表|任务计划|设备管理/
   },
   {
     code: "auxiliary",
-    pattern: /\b(database compare|spreadsheet compare|compare|telemetry|diagnostics?|feedback|support|configuration|configurator|configure|updater?|activation|license manager|language selector|import and export settings)\b|比较|诊断|反馈|支持|配置工具|更新程序|许可证/
+    pattern: /\b(7-zip file manager|7zfm|database compare|spreadsheet compare|compare|telemetry|diagnostics?|feedback|support|configuration|configurator|configure|updater?|activation|license manager|language selector|language preferences|language settings|office language|setlang|import and export settings)\b|比较|诊断|反馈|支持|配置工具|更新程序|许可证|语言首选项|语言选项/
   }
 ];
 
@@ -258,9 +259,12 @@ function importDuplicateKey(item: OrbitItemInput): string {
 }
 
 function shortcutWrapperLooksLowValue(text: string): ImportFilterCode | null {
-  if (/(^|[\\/\s])(cmd|powershell|pwsh|wscript|cscript)\.exe\b/.test(text)) return "developer";
-  if (/(^|[\\/\s])(appvlp|dfrgui|mmc|control|rundll32|regedit|eventvwr|services)\.exe\b/.test(text)) return "system";
-  if (/\.(chm|hlp|pdf|txt|rtf)(\s|$)/.test(text)) return "help";
+  if (/(^|[\\/\s])(cmd|powershell|pwsh|wscript|cscript|bash|sh|msys2|mingw32|mingw64|ucrt64)\.exe\b/.test(text)) return "developer";
+  if (/(^|[\\/\s])(appverif|ncu-ui|nsys-ui|nvvp|rtools|mingw32|mingw64|ucrt64)\.exe\b/.test(text)) return "developer";
+  if (/(^|[\\/\s])(appvlp|dfrgui|mmc|control|rundll32|regedit|eventvwr|services|recoverydrive)\.exe\b/.test(text)) return "system";
+  if (/(^|[\\/\s])(7zfm|setlang)\.exe\b/.test(text)) return "auxiliary";
+  if (/\.(bat|cmd|ps1|vbs|ahk)(\s|$)/.test(text)) return "script";
+  if (/\.(chm|hlp|pdf|txt|rtf|htm|html|url)(\s|$)/.test(text)) return "help";
   return null;
 }
 
@@ -1664,7 +1668,7 @@ export default function App() {
         return;
       }
 
-      // 默认选中所有项，但自动过滤包含 "uninstall" 或 "卸载" 字样的项
+      // Keep the full preview visible, but default-select only likely user-facing launch targets.
       const selectedIndices = buildDefaultImportSelection(kind, scanned);
 
       setImportPreview({
@@ -3444,8 +3448,7 @@ export default function App() {
       });
     const filterReasons = buildImportFilterReasons(kind, items);
 
-    // 检查某项是否为卸载程序
-    // 切换单个勾选状态
+    // Toggle a single scanned entry while preserving automatic filter hints.
     const handleToggleItem = (index: number) => {
       const nextSelected = new Set(selectedIndices);
       if (nextSelected.has(index)) {
