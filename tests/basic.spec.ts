@@ -138,6 +138,76 @@ test.describe('OrbitStart E2E Basic Verification', () => {
     await expect(page.locator('.settings-shell')).toBeVisible();
   });
 
+  test('should verify hotkey behavior settings options', async ({ page }) => {
+    const settingsButton = page.locator('.rail-button[title="设置"]').first();
+    await expect(settingsButton).toBeVisible();
+    await settingsButton.click();
+    await expect(page.locator('.settings-shell')).toBeVisible();
+
+    // Verify presence of hotkey behavior dropdown
+    const select = page.locator('label:has-text("热键功能选择") select');
+    await expect(select).toBeVisible();
+
+    // The default should be "command_bar"
+    await expect(select).toHaveValue('command_bar');
+
+    // Change value to "open_only"
+    await select.selectOption('open_only');
+    await expect(select).toHaveValue('open_only');
+
+    // Verify setting is stored in local storage
+    const hotkeyBehavior = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('orbitstart.browser.snapshot');
+      if (!raw) return null;
+      return JSON.parse(raw).settings?.hotkeyBehavior;
+    });
+    expect(hotkeyBehavior).toBe('open_only');
+  });
+
+  test('should create developer custom groups and items when developer template is selected in onboarding', async ({ page }) => {
+    // Navigate and clear onboarding state to force it to show
+    await page.goto('/');
+    await page.evaluate(() => {
+      window.localStorage.removeItem('orbitstart_onboarding_v1');
+      window.localStorage.removeItem('orbitstart.browser.snapshot');
+      window.localStorage.removeItem('orbitstart.browser.items');
+    });
+    await page.reload();
+
+    // Verify Onboarding Wizard overlay is visible
+    const wizard = page.locator('.onboarding-wizard');
+    await expect(wizard).toBeVisible();
+
+    // Find and click the developer template card
+    const devCard = page.locator('.template-card:has-text("我是开发者")');
+    await expect(devCard).toBeVisible();
+    await devCard.click();
+
+    // Now it should advance to "tags-created" screen showing the scan steps
+    await expect(page.locator('.success-badge:has-text("场景模板已应用")')).toBeVisible();
+
+    // Verify if the custom groups and items were created in localStorage
+    const snapshot = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('orbitstart.browser.snapshot');
+      return raw ? JSON.parse(raw) : null;
+    });
+
+    expect(snapshot).not.toBeNull();
+    const groupTitles = snapshot.groups.map((g: any) => g.title);
+    expect(groupTitles).toContain('开发工具');
+    expect(groupTitles).toContain('技术社区');
+    expect(groupTitles).toContain('开发工作区');
+
+    const items = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('orbitstart.browser.items');
+      return raw ? JSON.parse(raw) : [];
+    });
+    expect(items.length).toBeGreaterThan(0);
+    const vsCodeItem = items.find((i: any) => i.title === 'Visual Studio Code');
+    expect(vsCodeItem).toBeDefined();
+    expect(vsCodeItem.group).toBe('dev_tools');
+  });
+
   test('should verify Atelier Zero theme variables if active', async ({ page }) => {
     // Get the dataset theme ID of document.documentElement
     const themeId = await page.evaluate(() => document.documentElement.dataset.theme);

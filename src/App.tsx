@@ -47,13 +47,14 @@ import {
   Upload,
   Workflow,
   X,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Keyboard
 } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { DndContext, closestCenter, MouseSensor, TouchSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay } from "@dnd-kit/core";
 import { createPortal } from "react-dom";
-import { SortableContext, arrayMove, rectSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { SortableContext, arrayMove, rectSortingStrategy, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { LocalGalaxyBackdrop } from "./components/LocalGalaxyBackdrop";
 import { TripPanel } from "./components/TripPanel";
@@ -67,13 +68,12 @@ import {
 } from "./desktop/contextMenu";
 import { installDesktopShell } from "./desktop/desktopShell";
 import { closeWindow, getAppWindow, minimizeWindow, startWindowDrag, toggleMaximizeWindow } from "./desktop/windowControls";
-import { buildSortedResults, matchesItemEnhanced as scoreMatchesItem, matchesCommandEnhanced as scoreMatchesCommand, scoreItem } from "./lib/searchEngine";
+import { buildSortedResults, matchesItemEnhanced as scoreMatchesItem, matchesCommandEnhanced as scoreMatchesCommand, scoreItem, getPinyinInitials, recencyBonus } from "./lib/searchEngine";
 import { tripCategoryLabels } from "./lib/tripTemplates";
 import {
   shouldShowOnboarding,
   completeOnboarding,
-  skipOnboarding,
-  type ScenarioTag
+  skipOnboarding
 } from "./lib/onboarding";
 import { OnboardingWizard } from "./components/OnboardingWizard";
 import {
@@ -81,6 +81,7 @@ import {
   createItem,
   createItemsFromPaths,
   createGroup,
+  createCustomGroup,
   deleteGroup,
   createPluginTemplate,
   deleteItem,
@@ -117,13 +118,17 @@ import {
   setSafeMode,
   setAutoPinnedMode,
   setDisplayMode,
+  setHotkeyBehavior,
   toggleObsidianNoteFavorite,
   tripCountForItems,
   updateItem,
   launchItem,
   getAutostartEnabled,
   setAutostartEnabled,
-  reorderItems
+  reorderItems,
+  reorderGroups,
+  getGroupHotkeys,
+  updateGroupHotkey
 } from "./lib/native";
 import { createOrbitPluginHost } from "./plugin/api";
 import { localGalaxyAssets } from "./theme/localGalaxyAssets";
@@ -143,6 +148,7 @@ import type {
   ThemeManifest,
   TripSearchResult
 } from "./types";
+import type { ScenarioTag, ScenarioGroup } from "./lib/onboarding";
 
 const appIconSrc = new URL("../design/app-icons/orbitstart-first-icon-ui.png", import.meta.url).href;
 
@@ -173,7 +179,8 @@ type AppDialogState =
   | { type: "delete-item"; item: OrbitItem }
   | { type: "batch-delete" }
   | { type: "batch-move"; groupId: string }
-  | { type: "template"; value: string };
+  | { type: "template"; value: string }
+  | { type: "group-hotkey"; groupId: string; value: string };
 
 function getInitialView(): ViewId {
   if (typeof window === "undefined") return "dashboard";
@@ -517,6 +524,61 @@ function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (.
   };
 }
 
+interface SortableGroupTabProps {
+  group: OrbitGroup;
+  activeGroup: string;
+  setActiveGroup: (id: string) => void;
+  hotkey: string | null | undefined;
+  hotkeyBinderEnabled: boolean;
+}
+
+function SortableGroupTab({
+  group,
+  activeGroup,
+  setActiveGroup,
+  hotkey,
+  hotkeyBinderEnabled
+}: SortableGroupTabProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: group.id,
+  });
+
+  const style: CSSProperties = {
+    transform: transform ? CSS.Transform.toString(transform) : undefined,
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`group-tab-wrapper ${activeGroup === group.id ? "selected" : ""} ${isDragging ? "dragging" : ""}`}
+      data-group-id={group.id}
+      {...attributes}
+      {...listeners}
+    >
+      <button
+        type="button"
+        className={`group-tab-btn ${activeGroup === group.id ? "selected" : ""}`}
+        onClick={() => setActiveGroup(group.id)}
+      >
+        <Icon name={group.icon} size={16} />
+        <span>{group.title}</span>
+      </button>
+
+      {hotkeyBinderEnabled && hotkey && (
+        <span className="tab-hotkey-badge" onPointerDown={(e) => e.stopPropagation()}>
+          {hotkey}
+        </span>
+      )}
+    </div>
+  );
+}
+
 interface SortableResourceRowProps {
   item: OrbitItem;
   selectedIds: string[];
@@ -698,6 +760,9 @@ export default function App() {
   const [dragActive, setDragActive] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [autostartState, setAutostartState] = useState(false);
+  const [commandBarOpen, setCommandBarOpen] = useState(false);
+  const [commandBarQuery, setCommandBarQuery] = useState("");
+  const [commandBarSelectedIndex, setCommandBarSelectedIndex] = useState(0);
   const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
   const [recordedKeys, setRecordedKeys] = useState<string[]>([]);
   const [tripCounts, setTripCounts] = useState<Record<string, number>>({});
@@ -725,14 +790,148 @@ export default function App() {
   } | null>(null);
   const [pluginHostRevision, setPluginHostRevision] = useState(0);
   const paletteInputRef = useRef<HTMLInputElement>(null);
+  const commandBarInputRef = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const contextMenuRef = useRef<HTMLElement>(null);
   const contextEditTargetRef = useRef<HTMLElement | null>(null);
   const lastPointerRef = useRef({ x: 24, y: 24 });
   const dropInProgressRef = useRef(false);
 
+  const [hotkeysBoundToGroup, setHotkeysBoundToGroup] = useState<Record<string, string>>({});
+  const [groupDragActiveId, setGroupDragActiveId] = useState<string | null>(null);
+
   const pluginStateReady = plugins.length > 0;
   const pluginEnabled = (id: string) => plugins.some((plugin) => plugin.id === id && plugin.enabled);
+  const hotkeyBinderEnabled = pluginEnabled("hotkey-binder");
+
+  const fetchGroupHotkeys = async () => {
+    try {
+      const keys = await getGroupHotkeys();
+      setHotkeysBoundToGroup(keys);
+    } catch (e) {
+      console.error("Failed to load group hotkeys", e);
+    }
+  };
+
+  useEffect(() => {
+    if (hotkeyBinderEnabled) {
+      void fetchGroupHotkeys();
+    } else {
+      setHotkeysBoundToGroup({});
+    }
+  }, [hotkeyBinderEnabled]);
+
+  const handleGroupDragStart = (event: DragStartEvent) => {
+    setGroupDragActiveId(event.active.id as string);
+  };
+
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    setGroupDragActiveId(null);
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    setGroups((prev) => {
+      const oldIndex = prev.findIndex((g) => g.id === active.id);
+      const newIndex = prev.findIndex((g) => g.id === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      const next = arrayMove(prev, oldIndex, newIndex);
+      void reorderGroups(next.map((g) => g.id)).then((updatedGroups) => {
+        setGroups(updatedGroups);
+      }).catch((err) => {
+        console.error("Failed to reorder groups:", err);
+      });
+      return next;
+    });
+  };
+
+  const handleGroupDragCancel = () => {
+    setGroupDragActiveId(null);
+  };
+
+  const restrictToHorizontalAxis = ({ transform }: any) => ({
+    ...transform,
+    y: 0,
+  });
+
+  const handleGroupHotkeyKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.key === "Escape") {
+      setDialog(null);
+      return;
+    }
+
+    if (event.key === "Backspace") {
+      if (dialog?.type === "group-hotkey") {
+        setBusy(true);
+        void updateGroupHotkey(dialog.groupId, null).then(async () => {
+          const group = groups.find((g) => g.id === dialog.groupId);
+          setToast(`分组「${group?.title}」已解除快捷键绑定`);
+          setDialog(null);
+          const keys = await getGroupHotkeys();
+          setHotkeysBoundToGroup(keys);
+        }).catch((error) => {
+          setToast(`解除绑定失败：${String(error)}`);
+        }).finally(() => {
+          setBusy(false);
+        });
+      }
+      return;
+    }
+
+    const key = event.key;
+    const isModifier = ["Control", "Alt", "Shift", "Meta", "OS"].includes(key);
+
+    const keys: string[] = [];
+    if (event.ctrlKey) keys.push("Ctrl");
+    if (event.altKey) keys.push("Alt");
+    if (event.shiftKey) keys.push("Shift");
+    if (event.metaKey) keys.push("Win");
+
+    if (!isModifier) {
+      let keyName = key;
+      if (keyName === " ") keyName = "Space";
+      if (keyName.length === 1) {
+        keyName = keyName.toUpperCase();
+      } else {
+        keyName = keyName.charAt(0).toUpperCase() + keyName.slice(1);
+      }
+      if (!keys.includes(keyName)) {
+        keys.push(keyName);
+      }
+    }
+
+    const combination = keys.slice(0, 4).join("+");
+    setDialog((prev) => prev?.type === "group-hotkey" ? { ...prev, value: combination } : prev);
+  };
+
+  const handleGroupHotkeyKeyUp = async (event: React.KeyboardEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (dialog?.type === "group-hotkey" && dialog.value) {
+      const parts = dialog.value.split("+");
+      const hasMainKey = parts.length > 0 && !["Ctrl", "Alt", "Shift", "Win"].includes(parts[parts.length - 1]);
+
+      if (hasMainKey) {
+        setBusy(true);
+        try {
+          const group = groups.find((g) => g.id === dialog.groupId);
+          await updateGroupHotkey(dialog.groupId, dialog.value);
+          setToast(`分组「${group?.title}」已绑定快捷键：${dialog.value}`);
+          setDialog(null);
+          const keysList = await getGroupHotkeys();
+          setHotkeysBoundToGroup(keysList);
+        } catch (error) {
+          setToast(`绑定失败：${String(error)}`);
+        } finally {
+          setBusy(false);
+        }
+      }
+    }
+  };
+
   const tripsFeatureEnabled = !pluginStateReady || pluginEnabled("trips-search");
   const obsidianFeatureEnabled = !pluginStateReady || (pluginEnabled("core-obsidian") && pluginEnabled("obsidian-search"));
   const effectivePlugins = useMemo(
@@ -834,6 +1033,11 @@ export default function App() {
   async function reload() {
     const snapshot = await loadSnapshot();
     applySnapshot(snapshot);
+    if (snapshot.plugins.some((p) => p.id === "hotkey-binder" && p.enabled)) {
+      void fetchGroupHotkeys();
+    } else {
+      setHotkeysBoundToGroup({});
+    }
   }
 
   async function refreshTripCounts(scopeItems = items) {
@@ -1023,6 +1227,7 @@ export default function App() {
 
   function closeTransientUi() {
     setPaletteOpen(false);
+    setCommandBarOpen(false);
     setEditor(null);
     setBackupOpen(false);
     setDialog(null);
@@ -1030,11 +1235,21 @@ export default function App() {
     setContextMenu(null);
   }
 
+  const openCommandBar = () => {
+    setCommandBarQuery("");
+    setCommandBarSelectedIndex(0);
+    setCommandBarOpen(true);
+  };
+
   useEffect(() => {
     return installDesktopShell({
       closeTransientUi,
       focusSearch,
       openCommandPalette: () => setPaletteOpen(true),
+      openCommandBar: () => {
+        closeTransientUi();
+        openCommandBar();
+      },
       openSettings: () => {
         setLocalAuxPanel("settings");
         setSettingsSection("general");
@@ -1044,7 +1259,8 @@ export default function App() {
         setSettingsSection(sectionFromPanel(panel as AuxPanel));
       },
       refreshResources: reload,
-      toggleSafeMode
+      toggleSafeMode,
+      focusGroup: (groupId) => setActiveGroup(groupId)
     });
   }, [settings?.safeMode]);
 
@@ -1815,6 +2031,19 @@ export default function App() {
     }
   }
 
+  async function changeHotkeyBehavior(next: "command_bar" | "open_only") {
+    setBusy(true);
+    try {
+      const snapshot = await setHotkeyBehavior(next);
+      applySnapshot(snapshot);
+      setToast(next === "command_bar" ? "全局热键已设置为打开 Command Bar" : "全局热键已设置为单纯打开主窗口并聚焦");
+    } catch (error) {
+      setToast(`热键行为更新失败：${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function openPanelWindow(panel: AuxPanel) {
     // 设置页面直接在主窗口中央本地渲染，不再打开独立的 Tauri 子窗口以保证跟随和关闭生命周期一致
     setLocalAuxPanel(panel);
@@ -1943,6 +2172,190 @@ export default function App() {
     }
     setToast(`命令已触发：${command.title}`);
   }
+
+  interface CommandBarItem {
+    id: string;
+    title: string;
+    subtitle: string;
+    icon: string;
+    typeLabel: "应用" | "网站" | "分组" | "页面";
+    groupLabel?: string;
+    _score: number;
+    lastLaunchedAt?: string;
+    launchCount?: number;
+    favorite?: boolean;
+    run: () => void | Promise<void>;
+  }
+
+  function scoreGeneric(title: string, subtitle: string, query: string): number {
+    const q = query.trim().toLowerCase();
+    if (!q) return 1;
+
+    const titleLower = title.toLowerCase();
+    const subLower = subtitle.toLowerCase();
+    const py = getPinyinInitials(title);
+
+    if (titleLower === q) return 100;
+    if (titleLower.startsWith(q)) return 80;
+    if (titleLower.includes(q)) return 50;
+    if (py === q) return 40;
+    if (py.startsWith(q)) return 30;
+    if (py.includes(q)) return 20;
+    if (subLower.includes(q)) return 10;
+    return 0;
+  }
+
+  const commandBarResults = useMemo(() => {
+    const q = commandBarQuery.trim().toLowerCase();
+
+    // 1. Apps & Websites
+    const appAndWebsites: CommandBarItem[] = items
+      .filter((item) => item.kind === "app" || item.kind === "website")
+      .map((item) => {
+        const groupObj = groups.find((g) => g.id === item.group);
+        const score = q ? scoreItem(item, commandBarQuery) : 0;
+        return {
+          id: `item:${item.id}`,
+          title: item.title,
+          subtitle: item.subtitle || item.target,
+          icon: item.icon,
+          typeLabel: item.kind === "app" ? "应用" : "网站",
+          groupLabel: groupObj?.title,
+          _score: score,
+          lastLaunchedAt: item.lastLaunchedAt,
+          launchCount: item.launchCount || 0,
+          favorite: !!item.favorite,
+          run: () => openItem(item)
+        };
+      });
+
+    // 2. Groups
+    const groupItems: CommandBarItem[] = groups.map((g) => {
+      const score = q ? scoreGeneric(g.title, "", commandBarQuery) : 0;
+      return {
+        id: `group:${g.id}`,
+        title: g.title,
+        subtitle: `跳转到标签：${g.title}`,
+        icon: "Tag",
+        typeLabel: "分组",
+        _score: score,
+        run: () => {
+          setActiveGroup(g.id);
+          setActiveView("dashboard");
+        }
+      };
+    });
+
+    // 3. Internal Pages
+    const internalPageCandidates = [
+      { id: "dashboard", title: "工作台", subtitle: "跳转到主页工作台", icon: "LayoutDashboard" },
+      { id: "settings", title: "系统设置", subtitle: "管理基础设置", icon: "Settings", panel: "settings", section: "general" },
+      { id: "plugins", title: "插件管理", subtitle: "管理已安装插件", icon: "Blocks", panel: "plugins" },
+      { id: "themes", title: "主题工作室", subtitle: "管理与编辑主题", icon: "Palette", panel: "themes" },
+      { id: "logs", title: "运行日志", subtitle: "查看星际日志", icon: "Database", panel: "logs" },
+      { id: "about", title: "关于 OrbitStart", subtitle: "查看软件关于页面", icon: "Info", panel: "about" },
+      ...(obsidianFeatureEnabled ? [{ id: "obsidian", title: "Obsidian", subtitle: "管理知识库设置", icon: "NotebookText", panel: "obsidian" }] : [])
+    ];
+
+    const pageItems: CommandBarItem[] = internalPageCandidates.map((page) => {
+      const score = q ? scoreGeneric(page.title, page.subtitle, commandBarQuery) : 0;
+      return {
+        id: `page:${page.id}`,
+        title: page.title,
+        subtitle: page.subtitle,
+        icon: page.icon,
+        typeLabel: "页面",
+        _score: score,
+        run: () => {
+          if (page.id === "dashboard") {
+            setActiveView("dashboard");
+          } else if (page.id === "logs") {
+            setActiveView("logs");
+          } else if (page.panel) {
+            setLocalAuxPanel(page.panel as any);
+            if (page.section) {
+              setSettingsSection(page.section as any);
+            } else {
+              setSettingsSection(sectionFromPanel(page.panel as any));
+            }
+          }
+        }
+      };
+    });
+
+    let merged: CommandBarItem[] = [];
+    if (q) {
+      const allCandidates = [...appAndWebsites, ...groupItems, ...pageItems];
+      merged = allCandidates
+        .filter((c) => c._score > 0)
+        .sort((a, b) => b._score - a._score);
+    } else {
+      const sortedApps = appAndWebsites.sort((a, b) => {
+        const aRecent = recencyBonus(a.lastLaunchedAt);
+        const bRecent = recencyBonus(b.lastLaunchedAt);
+        if (Math.abs(aRecent - bRecent) > 0.5) return bRecent - aRecent;
+        const aLaunch = a.launchCount ?? 0;
+        const bLaunch = b.launchCount ?? 0;
+        if (aLaunch !== bLaunch) return bLaunch - aLaunch;
+        const aFav = a.favorite ? 1 : 0;
+        const bFav = b.favorite ? 1 : 0;
+        if (aFav !== bFav) return bFav - aFav;
+        return a.title.localeCompare(b.title, "zh-Hans-CN");
+      });
+
+      merged = [
+        ...sortedApps.slice(0, 10),
+        ...groupItems,
+        ...pageItems
+      ];
+    }
+
+    setCommandBarSelectedIndex((prev) => Math.min(prev, Math.max(0, merged.length - 1)));
+    return merged.slice(0, 16);
+  }, [items, groups, commandBarQuery, obsidianFeatureEnabled]);
+
+  const handleCommandBarKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    const total = commandBarResults.length;
+    if (total === 0) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setCommandBarOpen(false);
+      }
+      return;
+    }
+
+    switch (event.key) {
+      case "ArrowDown":
+        event.preventDefault();
+        setCommandBarSelectedIndex((prev) => (prev + 1) % total);
+        break;
+      case "ArrowUp":
+        event.preventDefault();
+        setCommandBarSelectedIndex((prev) => (prev - 1 + total) % total);
+        break;
+      case "Enter":
+        event.preventDefault();
+        const selected = commandBarResults[commandBarSelectedIndex];
+        if (selected) {
+          void selected.run();
+          setCommandBarOpen(false);
+        }
+        break;
+      case "Escape":
+        event.preventDefault();
+        setCommandBarOpen(false);
+        break;
+    }
+  };
+
+  useEffect(() => {
+    if (commandBarOpen) {
+      const timer = setTimeout(() => {
+        commandBarInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [commandBarOpen]);
 
   const paletteCommands = useMemo(() => {
     const raw = buildSortedResults({
@@ -2310,12 +2723,27 @@ export default function App() {
       </section>
 
       <section className="group-tabs" aria-label="资源分组">
-        {visibleGroups.map((group) => (
-          <button key={group.id} data-group-id={group.id} className={activeGroup === group.id ? "selected" : ""} onClick={() => setActiveGroup(group.id)}>
-            <Icon name={group.icon} size={16} />
-            <span>{group.title}</span>
-          </button>
-        ))}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleGroupDragStart}
+          onDragEnd={handleGroupDragEnd}
+          onDragCancel={handleGroupDragCancel}
+          modifiers={[restrictToHorizontalAxis]}
+        >
+          <SortableContext items={visibleGroups.map((g) => g.id)} strategy={horizontalListSortingStrategy}>
+            {visibleGroups.map((group) => (
+              <SortableGroupTab
+                key={group.id}
+                group={group}
+                activeGroup={activeGroup}
+                setActiveGroup={setActiveGroup}
+                hotkey={hotkeysBoundToGroup[group.id]}
+                hotkeyBinderEnabled={hotkeyBinderEnabled}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
         <button className="add-group-tab" onClick={addCustomGroup} disabled={busy}>
           <PlusCircle size={16} />
           <span>新分组</span>
@@ -2898,6 +3326,13 @@ export default function App() {
             </div>
           </label>
           <label>
+            热键功能选择
+            <select value={settings?.hotkeyBehavior === "open_only" ? "open_only" : "command_bar"} onChange={(event) => changeHotkeyBehavior(event.target.value as "command_bar" | "open_only")}>
+              <option value="command_bar">当前版本的 OrbitStart Command Bar</option>
+              <option value="open_only">先前版本单纯打开 OrbitStart</option>
+            </select>
+          </label>
+          <label>
             关闭按钮
             <select value={settings?.closeBehavior === "exit" ? "exit" : "tray"} onChange={(event) => changeCloseBehavior(event.target.value as "tray" | "exit")}>
               <option value="tray">隐藏到托盘</option>
@@ -2992,7 +3427,7 @@ export default function App() {
           <span><strong>{items.length}</strong>资源</span>
           <span><strong>{enabledPlugins}</strong>启用插件</span>
           <span><strong>{themes.length}</strong>主题</span>
-          <span><strong>0.5.8</strong>版本</span>
+          <span><strong>0.6.0</strong>版本</span>
         </div>
       </div>
       <div className="setting-card">
@@ -3092,6 +3527,49 @@ export default function App() {
   const renderAppDialog = () => {
     if (!dialog) return null;
     const moveGroups = visibleGroups.filter((group) => group.id !== "all");
+
+    if (dialog.type === "group-hotkey") {
+      const group = groups.find((g) => g.id === dialog.groupId);
+      return (
+        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
+          <div className="modal-panel dialog-panel">
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Hotkey Binder</p>
+                <h2>录制分组快捷键</h2>
+              </div>
+              <button type="button" className="icon-action" onClick={() => setDialog(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="dialog-body">
+              <p style={{ fontSize: "var(--font-size-sm)", color: "var(--soft)", marginBottom: "var(--space-4)" }}>
+                请按下你想为分类 <strong>{group?.title}</strong> 绑定的全局快捷键（如 <code>Ctrl+Shift+1</code>）。录制完成后窗口将自动关闭。
+              </p>
+              <label>
+                按键录制中...
+                <input
+                  autoFocus
+                  readOnly
+                  placeholder="按下按键组合进行录制..."
+                  value={dialog.value || "请按下按键..."}
+                  onKeyDown={handleGroupHotkeyKeyDown}
+                  onKeyUp={handleGroupHotkeyKeyUp}
+                  className="recording"
+                  style={{ caretColor: "transparent", cursor: "pointer", textAlign: "center", fontSize: "16px", fontWeight: "bold" }}
+                />
+              </label>
+              <p style={{ fontSize: "var(--font-size-xs)", color: "var(--soft)", marginTop: "var(--space-2)" }}>
+                支持 Ctrl, Alt, Shift, Win + 任意单键。按 <code>Backspace</code> 清除当前绑定，按 <code>Escape</code> 退出。
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-action" onClick={() => setDialog(null)}>取消</button>
+            </div>
+          </div>
+        </section>
+      );
+    }
 
     if (dialog.type === "group") {
       return (
@@ -3333,9 +3811,48 @@ export default function App() {
         {contextMenu.kind === "group" && contextMenu.groupId && (() => {
           const targetGroup = groups.find((candidate) => candidate.id === contextMenu.groupId);
           if (!targetGroup) return null;
+          const hotkey = hotkeysBoundToGroup[targetGroup.id];
           return (
             <>
-              <button type="button" onClick={() => { setActiveGroup(targetGroup.id); setContextMenu(null); }}>{"\u5207\u6362\u5230\u6b64\u6807\u7b7e"}</button>
+              <button type="button" onClick={() => { setActiveGroup(targetGroup.id); setContextMenu(null); }}>{"切换到此标签"}</button>
+              
+              {hotkeyBinderEnabled && (
+                <>
+                  <span className="context-separator" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDialog({ type: "group-hotkey", groupId: targetGroup.id, value: hotkey || "" });
+                      setContextMenu(null);
+                    }}
+                  >
+                    {hotkey ? "修改当前快捷键" : "绑定全局快捷键"}
+                  </button>
+                  {hotkey && (
+                    <button
+                      type="button"
+                      className="context-danger"
+                      onClick={async () => {
+                        setContextMenu(null);
+                        setBusy(true);
+                        try {
+                          await updateGroupHotkey(targetGroup.id, null);
+                          setToast(`分组「${targetGroup.title}」已解除快捷键绑定`);
+                          const keys = await getGroupHotkeys();
+                          setHotkeysBoundToGroup(keys);
+                        } catch (error) {
+                          setToast(`解除绑定失败：${String(error)}`);
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      {"删除全局快捷键"}
+                    </button>
+                  )}
+                </>
+              )}
+
               <span className="context-separator" />
               {targetGroup.custom ? (
                 <button
@@ -3344,10 +3861,10 @@ export default function App() {
                   onClick={() => { void removeGroup(targetGroup.id); setContextMenu(null); }}
                   disabled={busy}
                 >
-                  {`\u5220\u9664\u6807\u7b7e\u201c${targetGroup.title}\u201d`}
+                  {`删除标签“${targetGroup.title}”`}
                 </button>
               ) : (
-                <button type="button" disabled>{"\u5185\u7f6e\u6807\u7b7e\u4e0d\u53ef\u5220\u9664"}</button>
+                <button type="button" disabled>{"内置标签不可删除"}</button>
               )}
             </>
           );
@@ -3729,24 +4246,56 @@ export default function App() {
     <>
       {showOnboarding && (
         <OnboardingWizard
-          onTemplateSelected={(tags) => {
-            // Convert ScenarioTag[] to OrbitItem[] and add to items state
-            const newItems: OrbitItem[] = tags.map((t) => ({
-              id: t.id,
-              title: t.title,
-              subtitle: t.kind === "app" ? "本地程序" : t.kind === "website" ? "网址" : t.kind === "folder" ? "文件夹" : t.kind === "script" ? "脚本" : "动作链",
-              kind: t.kind,
-              group: "all",
-              target: t.target,
-              aliases: [],
-              tags: [t.kind === "action_chain" ? "automation" : "template"],
-              icon: t.icon,
-              accent: t.accent,
-              favorite: t.favorite ?? false,
-              launchCount: 0
-            }));
-            setItems((prev) => [...prev, ...newItems]);
-            setToast(`已创建 ${newItems.length} 个示例资源`);
+          onTemplateSelected={async (tags, groups) => {
+            // Resolve current Windows username to replace [user] placeholders in template paths
+            const userName = (typeof window !== "undefined" && (window as any).__ORBIT_USER_NAME__) || "";
+            const resolvePath = (raw: string) =>
+              userName ? raw.replace(/\[user\]/g, userName) : raw;
+
+            // 1. Ensure custom groups needed by the templates actually exist
+            setBusy(true);
+            try {
+              for (const g of groups) {
+                try {
+                  await createCustomGroup(g.id, g.title, g.icon, g.description);
+                } catch (e) {
+                  console.warn("Failed to create onboarding custom group:", g.title, e);
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+
+            // 2. Persist each tag to the SQLite database via createItem
+            let created = 0;
+            try {
+              for (const t of tags) {
+                try {
+                  await createItem({
+                    title: t.title,
+                    subtitle: t.kind === "app" ? "本地程序" : t.kind === "website" ? "网址" : t.kind === "folder" ? "文件夹" : t.kind === "script" ? "脚本" : "动作链",
+                    kind: t.kind,
+                    group: t.group,
+                    target: resolvePath(t.target),
+                    aliases: [],
+                    tags: [t.kind === "action_chain" ? "automation" : "template"],
+                    icon: t.icon,
+                    accent: t.accent,
+                    favorite: t.favorite ?? false
+                  });
+                  created++;
+                } catch (e) {
+                  console.warn("Failed to create onboarding item:", t.title, e);
+                }
+              }
+              // 3. Reload from database so React state reflects what's actually persisted
+              await reload();
+              setToast(`已创建 ${created} 个示例资源`);
+            } catch (error) {
+              setToast(`创建示例资源失败：${String(error)}`);
+            } finally {
+              setBusy(false);
+            }
           }}
           onScanShortcuts={async () => {
             setBusy(true);
@@ -3999,6 +4548,71 @@ export default function App() {
             </div>
           </div>
         </section>
+      )}
+
+      {commandBarOpen && createPortal(
+        <section
+          className="palette-backdrop"
+          role="dialog"
+          aria-modal="true"
+          onClick={(e) => { if (e.target === e.currentTarget) setCommandBarOpen(false); }}
+        >
+          <div className="command-palette command-bar-panel">
+            <div className="palette-input">
+              <Search size={20} />
+              <input
+                ref={commandBarInputRef}
+                value={commandBarQuery}
+                onChange={(event) => setCommandBarQuery(event.target.value)}
+                onKeyDown={handleCommandBarKeyDown}
+                placeholder="搜索已添加的应用、网站、分组或页面..."
+                autoFocus
+              />
+              {commandBarQuery ? (
+                <button type="button" title="清空" onClick={() => setCommandBarQuery("")} className="palette-clear-btn">
+                  <X size={16} />
+                </button>
+              ) : (
+                <button type="button" title="关闭" onClick={() => setCommandBarOpen(false)}>
+                  <X size={18} />
+                </button>
+              )}
+            </div>
+            <div className="palette-results">
+              {commandBarResults.length === 0 && (
+                <div className="palette-empty">
+                  <Search size={24} />
+                  <span>没有找到已整理的入口</span>
+                </div>
+              )}
+              {commandBarResults.map((result, idx) => (
+                <button
+                  type="button"
+                  key={result.id}
+                  className={idx === commandBarSelectedIndex ? "result-selected" : ""}
+                  onClick={async () => {
+                    await result.run();
+                    setCommandBarOpen(false);
+                  }}
+                  onMouseEnter={() => setCommandBarSelectedIndex(idx)}
+                >
+                  <span className="result-icon">
+                    <Icon name={result.icon} size={22} />
+                  </span>
+                  <span>
+                    <strong>{result.title}</strong>
+                    <small>{result.subtitle}</small>
+                  </span>
+                  <div className="result-meta-tags">
+                    {result.groupLabel && <em className="meta-group-tag">{result.groupLabel}</em>}
+                    <em className="meta-type-tag">{result.typeLabel}</em>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>,
+        document.body
       )}
 
       {editor && (

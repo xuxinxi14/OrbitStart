@@ -7,10 +7,12 @@ interface DesktopShellOptions {
   closeTransientUi: () => void;
   focusSearch: () => void;
   openCommandPalette: () => void;
+  openCommandBar: () => void;
   openSettings: () => void;
   openPanel: (panel: string) => void;
   refreshResources: () => void | Promise<void>;
   toggleSafeMode: () => void | Promise<void>;
+  focusGroup: (groupId: string) => void;
 }
 
 function installDragGuard() {
@@ -32,6 +34,10 @@ function installTauriEventBridge(options: DesktopShellOptions) {
         showAndFocusWindow();
         options.focusSearch();
       }));
+      disposers.push(await listen("orbit://open-command-bar", () => {
+        showAndFocusWindow();
+        options.openCommandBar();
+      }));
       disposers.push(await listen("orbit://open-settings", () => {
         showAndFocusWindow();
         options.openSettings();
@@ -45,6 +51,10 @@ function installTauriEventBridge(options: DesktopShellOptions) {
       }));
       disposers.push(await listen("orbit://toggle-safe-mode", () => {
         void options.toggleSafeMode();
+      }));
+      disposers.push(await listen("orbit://focus-group", (event) => {
+        showAndFocusWindow();
+        options.focusGroup(event.payload as string);
       }));
     } catch {
       // Browser preview does not provide Tauri's event bridge.

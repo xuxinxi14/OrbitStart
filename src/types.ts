@@ -218,6 +218,7 @@ export interface AppSettings {
   dataDir: string;
   autoPinnedMode: boolean;
   displayMode: "simple" | "detailed" | string;
+  hotkeyBehavior: "command_bar" | "open_only" | string;
 }
 
 export interface SearchResult {

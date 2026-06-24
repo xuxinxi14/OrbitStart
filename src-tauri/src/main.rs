@@ -154,6 +154,7 @@ struct AppSettings {
     data_dir: String,
     auto_pinned_mode: bool,
     display_mode: String,
+    hotkey_behavior: String,
 }
 
 #[derive(Clone, Serialize)]
@@ -495,6 +496,26 @@ fn init_db(conn: &Connection) -> Result<(), String> {
     )
     .map_err(|error| format!("Failed to create sort_order index: {error}"))?;
 
+    ensure_table_column(
+        conn,
+        "groups",
+        "sort_order",
+        "ALTER TABLE groups ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0",
+    )?;
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_groups_sort_order ON groups(sort_order)",
+        [],
+    )
+    .map_err(|error| format!("Failed to create groups sort_order index: {error}"))?;
+
+    for (index, group) in default_groups().iter().enumerate() {
+        let _ = conn.execute(
+            "UPDATE groups SET sort_order = ?1 WHERE id = ?2 AND (sort_order = 0 OR sort_order IS NULL)",
+            params![index as i64, &group.id],
+        );
+    }
+
     let count: i64 = conn
         .query_row("SELECT COUNT(*) FROM items", [], |row| row.get(0))
         .map_err(|error| format!("Failed to count items: {error}"))?;
@@ -546,6 +567,7 @@ fn ensure_default_settings(conn: &Connection) -> Result<(), String> {
         ("close_behavior", "tray"),
         ("auto_pinned_mode", "false"),
         ("display_mode", "simple"),
+        ("hotkey_behavior", "command_bar"),
     ] {
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES (?1, ?2)",
@@ -587,6 +609,7 @@ fn app_settings(conn: &Connection) -> Result<AppSettings, String> {
         data_dir: app_data_dir()?.to_string_lossy().to_string(),
         auto_pinned_mode: setting(conn, "auto_pinned_mode", "false")? == "true",
         display_mode: setting(conn, "display_mode", "simple")?,
+        hotkey_behavior: setting(conn, "hotkey_behavior", "command_bar")?,
     })
 }
 
@@ -693,10 +716,10 @@ fn default_groups() -> Vec<OrbitGroup> {
 
 fn seed_groups(conn: &Connection) -> Result<(), String> {
     let now = now_string();
-    for group in default_groups() {
+    for (index, group) in default_groups().iter().enumerate() {
         conn.execute(
-            "INSERT OR IGNORE INTO groups (id, title, icon, description, custom, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![group.id, group.title, group.icon, group.description, if group.custom { 1 } else { 0 }, now],
+            "INSERT OR IGNORE INTO groups (id, title, icon, description, custom, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![group.id, group.title, group.icon, group.description, if group.custom { 1 } else { 0 }, index as i64, now],
         )
         .map_err(|error| format!("Failed to seed group: {error}"))?;
     }
@@ -709,17 +732,7 @@ fn all_groups(conn: &Connection) -> Result<Vec<OrbitGroup>, String> {
             r#"
             SELECT id, title, icon, description, custom
             FROM groups
-            ORDER BY
-              CASE id
-                WHEN 'all' THEN 0
-                WHEN 'apps' THEN 1
-                WHEN 'work' THEN 2
-                WHEN 'web' THEN 3
-                WHEN 'scripts' THEN 4
-                WHEN 'plugins' THEN 5
-                ELSE 20
-              END,
-              title COLLATE NOCASE ASC
+            ORDER BY sort_order ASC, title COLLATE NOCASE ASC
             "#,
         )
         .map_err(|error| format!("Failed to prepare groups query: {error}"))?;
@@ -2762,6 +2775,122 @@ fn reorder_items(app: tauri::AppHandle, ordered_ids: Vec<String>) -> Result<(), 
     Ok(())
 }
 
+fn get_custom_hotkeys(conn: &Connection) -> Result<Vec<(String, String)>, String> {
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings WHERE key LIKE 'hotkey_binder:%'")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut res = Vec::new();
+    for row in rows {
+        if let Ok((key, value)) = row {
+            if let Some(group_id) = key.strip_prefix("hotkey_binder:") {
+                res.push((group_id.to_string(), value));
+            }
+        }
+    }
+    Ok(res)
+}
+
+#[tauri::command]
+fn reorder_groups(app: tauri::AppHandle, ordered_ids: Vec<String>) -> Result<Vec<OrbitGroup>, String> {
+    let mut conn = open_db()?;
+    let tx = conn
+        .transaction()
+        .map_err(|error| format!("Failed to start transaction: {error}"))?;
+    for (index, id) in ordered_ids.iter().enumerate() {
+        tx.execute(
+            "UPDATE groups SET sort_order = ?1 WHERE id = ?2",
+            params![index as i64, id],
+        )
+        .map_err(|error| format!("Failed to update sort order of group {id}: {error}"))?;
+    }
+    tx.commit()
+        .map_err(|error| format!("Failed to commit transaction: {error}"))?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    all_groups(&conn)
+}
+
+#[tauri::command]
+fn get_group_hotkeys() -> Result<std::collections::HashMap<String, String>, String> {
+    let conn = open_db()?;
+    let items = get_custom_hotkeys(&conn)?;
+    let mut map = std::collections::HashMap::new();
+    for (group_id, hotkey) in items {
+        map.insert(group_id, hotkey);
+    }
+    Ok(map)
+}
+
+#[tauri::command]
+fn update_group_hotkey(app: tauri::AppHandle, group_id: String, new_hotkey: Option<String>) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+        let conn = open_db().map_err(|e| e.to_string())?;
+        let setting_key = format!("hotkey_binder:{}", group_id);
+        let old_hotkey = setting(&conn, &setting_key, "").unwrap_or_default();
+
+        let shortcut_manager = app.global_shortcut();
+
+        if !old_hotkey.is_empty() {
+            if let Ok(old_shortcut) = old_hotkey.to_lowercase().parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                let _ = shortcut_manager.unregister(old_shortcut);
+            }
+        }
+
+        if let Some(ref hotkey) = new_hotkey {
+            if !hotkey.is_empty() {
+                let new_shortcut = hotkey
+                    .to_lowercase()
+                    .parse::<tauri_plugin_global_shortcut::Shortcut>()
+                    .map_err(|e| format!("解析快捷键失败，格式可能不正确: {}", e))?;
+                
+                shortcut_manager
+                    .register(new_shortcut)
+                    .map_err(|e| format!("快捷键冲突或注册失败: {}", e))?;
+            }
+        }
+
+        if let Some(ref hotkey) = new_hotkey {
+            if !hotkey.is_empty() {
+                set_setting_value(&conn, &setting_key, hotkey)?;
+            } else {
+                conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                    .map_err(|e| e.to_string())?;
+            }
+        } else {
+            conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                .map_err(|e| e.to_string())?;
+        }
+
+        let _ = app.emit("orbit://refresh-resources", ());
+        Ok(())
+    }
+    #[cfg(not(desktop))]
+    {
+        let conn = open_db().map_err(|e| e.to_string())?;
+        let setting_key = format!("hotkey_binder:{}", group_id);
+        if let Some(ref hotkey) = new_hotkey {
+            if !hotkey.is_empty() {
+                set_setting_value(&conn, &setting_key, hotkey)?;
+            } else {
+                conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                    .map_err(|e| e.to_string())?;
+            }
+        } else {
+            conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                .map_err(|e| e.to_string())?;
+        }
+        let _ = app.emit("orbit://refresh-resources", ());
+        Ok(())
+    }
+}
+
 #[tauri::command]
 fn create_item(app: tauri::AppHandle, input: OrbitItemInput) -> Result<OrbitItem, String> {
     let conn = open_db()?;
@@ -3913,10 +4042,33 @@ fn create_group(app: tauri::AppHandle, title: String) -> Result<Vec<OrbitGroup>,
     let conn = open_db()?;
     let id = make_id("group", title);
     conn.execute(
-        "INSERT OR IGNORE INTO groups (id, title, icon, description, custom, created_at) VALUES (?1, ?2, 'Bookmark', ?3, 1, ?4)",
+        "INSERT OR IGNORE INTO groups (id, title, icon, description, custom, sort_order, created_at) VALUES (?1, ?2, 'Bookmark', ?3, 1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM groups), ?4)",
         params![id, title, format!("自定义标签：{title}"), now_string()],
     )
     .map_err(|error| format!("Failed to create group: {error}"))?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    all_groups(&conn)
+}
+
+#[tauri::command]
+fn create_custom_group(
+    app: tauri::AppHandle,
+    id: String,
+    title: String,
+    icon: String,
+    description: String,
+) -> Result<Vec<OrbitGroup>, String> {
+    let title = title.trim();
+    let id = id.trim();
+    if title.is_empty() || id.is_empty() {
+        return Err("Group title and ID cannot be empty".to_string());
+    }
+    let conn = open_db()?;
+    conn.execute(
+        "INSERT OR IGNORE INTO groups (id, title, icon, description, custom, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, 1, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM groups), ?5)",
+        params![id, title, icon, description, now_string()],
+    )
+    .map_err(|error| format!("Failed to create custom group: {error}"))?;
     let _ = app.emit("orbit://refresh-resources", ());
     all_groups(&conn)
 }
@@ -4597,6 +4749,14 @@ fn set_display_mode(app: tauri::AppHandle, mode: String) -> Result<CatalogSnapsh
 }
 
 #[tauri::command]
+fn set_hotkey_behavior(app: tauri::AppHandle, behavior: String) -> Result<CatalogSnapshot, String> {
+    let conn = open_db()?;
+    set_setting_value(&conn, "hotkey_behavior", &behavior)?;
+    let _ = app.emit("orbit://refresh-resources", ());
+    catalog_snapshot()
+}
+
+#[tauri::command]
 fn export_catalog_json() -> Result<ExportResult, String> {
     let conn = open_db()?;
     let export = CatalogExport {
@@ -4737,6 +4897,32 @@ fn ensure_local_templates() -> Result<(), String> {
             obsidian_plugin_readme(),
         )
         .map_err(|error| format!("Failed to write obsidian plugin README: {error}"))?;
+    }
+
+    let hotkey_plugin_root = plugins_dir()?.join("hotkey-binder");
+    if !hotkey_plugin_root.exists() {
+        fs::create_dir_all(&hotkey_plugin_root)
+            .map_err(|error| format!("Failed to create hotkey plugin: {error}"))?;
+        fs::write(
+            hotkey_plugin_root.join("plugin.json"),
+            hotkey_binder_manifest(),
+        )
+        .map_err(|error| format!("Failed to write hotkey plugin manifest: {error}"))?;
+        fs::write(
+            hotkey_plugin_root.join("main.ts"),
+            hotkey_binder_source(),
+        )
+        .map_err(|error| format!("Failed to write hotkey plugin source: {error}"))?;
+        fs::write(
+            hotkey_plugin_root.join("orbitstart-plugin-api.d.ts"),
+            hello_plugin_api_types(),
+        )
+        .map_err(|error| format!("Failed to write hotkey plugin API types: {error}"))?;
+        fs::write(
+            hotkey_plugin_root.join("README.md"),
+            hotkey_binder_readme(),
+        )
+        .map_err(|error| format!("Failed to write hotkey plugin README: {error}"))?;
     }
 
     let theme_root = themes_dir()?.join("aurora-focus");
@@ -5109,6 +5295,55 @@ Official local OrbitStart plugin for searching the read-only Obsidian task index
 "#
 }
 
+fn hotkey_binder_manifest() -> &'static str {
+    r#"{
+  "id": "hotkey-binder",
+  "name": "Hotkey Binder",
+  "version": "0.1.0",
+  "description": "为标签和常用页面绑定全局快捷键，一键直达特定功能区。",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "ui:toast", "label": "Show toast messages", "risk": "low" },
+    { "id": "hotkey:write", "label": "Register and update group hotkeys", "risk": "high" }
+  ],
+  "contributes": { "commands": 1, "searchProviders": 0, "themes": 0, "views": 0 }
+}
+"#
+}
+
+fn hotkey_binder_source() -> &'static str {
+    r#"import type { OrbitPlugin } from "./orbitstart-plugin-api";
+
+const plugin: OrbitPlugin = {
+  activate(ctx) {
+    ctx.commands.registerCommand({
+      id: "bind-info",
+      title: "热键绑定说明",
+      subtitle: "在标签右上角点击键盘图标，即可为该功能区绑定唤出热键。",
+      icon: "Keyboard",
+      keywords: ["hotkey", "bind", "快捷键", "绑定"],
+      run: async () => {
+        ctx.ui.toast("请在标签右上角点击键盘图标进行快捷键绑定。");
+      }
+    });
+  }
+};
+
+export default plugin;
+"#
+}
+
+fn hotkey_binder_readme() -> &'static str {
+    r#"# Hotkey Binder
+
+Official local OrbitStart plugin to bind global shortcuts to groups.
+
+- Click the Keyboard icon on group tabs to record a hotkey.
+- Pressing the registered hotkey wakes up OrbitStart and switches to the group.
+"#
+}
+
 fn sample_theme_manifest() -> &'static str {
     r##"{
   "id": "aurora-focus",
@@ -5319,7 +5554,14 @@ fn show_and_focus_main(app: &tauri::AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
-        let _ = window.emit("orbit://focus-search", ());
+        let behavior = open_db()
+            .and_then(|conn| setting(&conn, "hotkey_behavior", "command_bar"))
+            .unwrap_or_else(|_| "command_bar".to_string());
+        if behavior == "open_only" {
+            let _ = window.emit("orbit://focus-search", ());
+        } else {
+            let _ = window.emit("orbit://open-command-bar", ());
+        }
     }
 }
 
@@ -5365,6 +5607,49 @@ fn handle_main_window_close(window: &tauri::Window, event: &WindowEvent) {
 }
 
 #[cfg(desktop)]
+fn show_navigate_to_group(app: &tauri::AppHandle, group_id: &str) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        let _ = window.emit("orbit://focus-group", group_id);
+    }
+}
+
+#[cfg(desktop)]
+fn handle_global_shortcut_press(app: &tauri::AppHandle, shortcut: &tauri_plugin_global_shortcut::Shortcut) {
+    let main_hotkey_str = open_db()
+        .and_then(|conn| setting(&conn, "global_hotkey", "Ctrl+Alt+Space"))
+        .unwrap_or_else(|_| "Ctrl+Alt+Space".to_string());
+    
+    let main_shortcut = main_hotkey_str
+        .to_lowercase()
+        .parse::<tauri_plugin_global_shortcut::Shortcut>();
+
+    if let Ok(main_sh) = main_shortcut {
+        if shortcut == &main_sh {
+            show_and_focus_main(app);
+            return;
+        }
+    }
+
+    if let Ok(conn) = open_db() {
+        if let Ok(custom_hotkeys) = get_custom_hotkeys(&conn) {
+            for (group_id, hotkey_str) in custom_hotkeys {
+                if !hotkey_str.is_empty() {
+                    if let Ok(sh) = hotkey_str.to_lowercase().parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                        if shortcut == &sh {
+                            show_navigate_to_group(app, &group_id);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(desktop)]
 fn setup_global_shortcut(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
@@ -5375,9 +5660,9 @@ fn setup_global_shortcut(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
     let hotkey_str = hotkey_str.to_lowercase();
 
     let builder =
-        tauri_plugin_global_shortcut::Builder::new().with_handler(|app, _shortcut, event| {
+        tauri_plugin_global_shortcut::Builder::new().with_handler(|app, shortcut, event| {
             if event.state == ShortcutState::Pressed {
-                show_and_focus_main(app);
+                handle_global_shortcut_press(app, shortcut);
             }
         });
 
@@ -5391,6 +5676,24 @@ fn setup_global_shortcut(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
                     "Failed to register initial global shortcut '{}': {}",
                     hotkey_str, e
                 );
+            }
+        }
+
+        // 动态注册从数据库读取的分组绑定快捷键
+        if let Ok(conn) = open_db() {
+            if let Ok(custom_hotkeys) = get_custom_hotkeys(&conn) {
+                for (group_id, hotkey_str) in custom_hotkeys {
+                    if !hotkey_str.is_empty() {
+                        if let Ok(sh) = hotkey_str.to_lowercase().parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                            if let Err(e) = app.global_shortcut().register(sh) {
+                                  eprintln!(
+                                      "Failed to register group shortcut '{}' for group '{}': {}",
+                                      hotkey_str, group_id, e
+                                  );
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -5439,10 +5742,14 @@ pub fn run() {
             catalog_snapshot,
             create_item,
             reorder_items,
+            reorder_groups,
+            get_group_hotkeys,
+            update_group_hotkey,
             create_items_from_paths,
             pick_resource_input,
             pick_icon_image,
             create_group,
+            create_custom_group,
             delete_group,
             list_trips,
             create_trip,
@@ -5482,6 +5789,7 @@ pub fn run() {
             set_safe_mode,
             set_auto_pinned_mode,
             set_display_mode,
+            set_hotkey_behavior,
             read_plugin_runtime,
             record_plugin_runtime_event,
             export_catalog_json,

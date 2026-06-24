@@ -944,7 +944,8 @@ export const settings: AppSettings = {
   closeBehavior: "tray",
   dataDir: "local-preview",
   autoPinnedMode: false,
-  displayMode: "simple"
+  displayMode: "simple",
+  hotkeyBehavior: "command_bar"
 };
 
 export const logs: PluginLog[] = [

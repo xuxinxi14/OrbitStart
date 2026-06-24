@@ -186,7 +186,7 @@ const MAX_LAUNCH_BONUS = 40;
 const RECENT_HALF_LIFE_HOURS = 168; // 7 days half-life
 
 /** Compute recency bonus from lastLaunchedAt timestamp. */
-function recencyBonus(lastLaunchedAt?: string): number {
+export function recencyBonus(lastLaunchedAt?: string): number {
   if (!lastLaunchedAt) return 0;
   const seconds = Number(lastLaunchedAt);
   if (!Number.isFinite(seconds)) return 0; // non-numeric = relative text like "刚刚"

@@ -299,6 +299,36 @@ export async function createGroup(title: string): Promise<Phase0Snapshot["groups
   }
 }
 
+export async function createCustomGroup(
+  id: string,
+  title: string,
+  icon: string,
+  description: string
+): Promise<Phase0Snapshot["groups"]> {
+  try {
+    return await invokeNative<Phase0Snapshot["groups"]>("create_custom_group", {
+      id,
+      title,
+      icon,
+      description
+    });
+  } catch {
+    const snapshot = readBrowserSnapshot();
+    const nextGroups = [
+      ...snapshot.groups.filter((g) => g.id !== id),
+      {
+        id,
+        title,
+        icon,
+        description,
+        custom: true
+      }
+    ];
+    writeBrowserSnapshot({ ...snapshot, groups: nextGroups });
+    return nextGroups;
+  }
+}
+
 export async function deleteGroup(id: string): Promise<Phase0Snapshot["groups"]> {
   try {
     return await invokeNative<Phase0Snapshot["groups"]>("delete_group", { id });
@@ -783,6 +813,20 @@ export async function setDisplayMode(mode: "simple" | "detailed"): Promise<Phase
   }
 }
 
+export async function setHotkeyBehavior(behavior: "command_bar" | "open_only"): Promise<Phase0Snapshot> {
+  try {
+    return await invokeNative<Phase0Snapshot>("set_hotkey_behavior", { behavior });
+  } catch {
+    const snapshot = readBrowserSnapshot();
+    const next = {
+      ...snapshot,
+      settings: { ...snapshot.settings, hotkeyBehavior: behavior }
+    };
+    writeBrowserSnapshot(next);
+    return next;
+  }
+}
+
 export async function exportCatalogJson(): Promise<ExportResult> {
   try {
     return await invokeNative<ExportResult>("export_catalog_json");
@@ -955,5 +999,45 @@ export async function reorderItems(orderedIds: string[]): Promise<void> {
       return aIdx - bIdx;
     });
     writeBrowserItems(reordered);
+  }
+}
+
+export async function reorderGroups(orderedIds: string[]): Promise<Phase0Snapshot["groups"]> {
+  try {
+    return await invokeNative<Phase0Snapshot["groups"]>("reorder_groups", { orderedIds });
+  } catch {
+    const snapshot = readBrowserSnapshot();
+    const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
+    const reordered = [...snapshot.groups].sort((a, b) => {
+      const aIdx = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+      const bIdx = orderMap.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+      return aIdx - bIdx;
+    });
+    writeBrowserSnapshot({ ...snapshot, groups: reordered });
+    return reordered;
+  }
+}
+
+export async function getGroupHotkeys(): Promise<Record<string, string>> {
+  try {
+    return await invokeNative<Record<string, string>>("get_group_hotkeys");
+  } catch {
+    const raw = window.localStorage.getItem("orbitstart.browser.group_hotkeys");
+    return raw ? JSON.parse(raw) : {};
+  }
+}
+
+export async function updateGroupHotkey(groupId: string, hotkey: string | null): Promise<void> {
+  try {
+    await invokeNative<void>("update_group_hotkey", { groupId, newHotkey: hotkey });
+  } catch {
+    const raw = window.localStorage.getItem("orbitstart.browser.group_hotkeys");
+    const map = raw ? JSON.parse(raw) : {};
+    if (hotkey) {
+      map[groupId] = hotkey;
+    } else {
+      delete map[groupId];
+    }
+    window.localStorage.setItem("orbitstart.browser.group_hotkeys", JSON.stringify(map));
   }
 }

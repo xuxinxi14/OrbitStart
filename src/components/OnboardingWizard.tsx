@@ -15,6 +15,7 @@ import {
   type OnboardingState,
   type OnboardingStep,
   type ScenarioTag,
+  type ScenarioGroup,
   DEFAULT_ONBOARDING_STATE,
   shouldShowOnboarding,
   completeOnboarding,
@@ -26,8 +27,8 @@ import {
 } from "../lib/onboarding";
 
 interface OnboardingWizardProps {
-  /** Called when user selects a template and tags are created. Receives the new tags. */
-  onTemplateSelected: (tags: ScenarioTag[]) => void;
+  /** Called when user selects a template and tags are created. Receives the new tags and groups. */
+  onTemplateSelected: (tags: ScenarioTag[], groups: ScenarioGroup[]) => void;
   /** Called when user clicks "scan shortcuts" button. */
   onScanShortcuts: () => void | Promise<void>;
   /** Called when user clicks "scan bookmarks" button. */
@@ -67,7 +68,7 @@ export function OnboardingWizard({
   const handleSelectTemplate = useCallback((templateId: string) => {
     const result = selectTemplate(templateId);
     setState(result);
-    onTemplateSelected(result.newTags);
+    onTemplateSelected(result.newTags, result.newGroups);
     goToStep("tags-created");
   }, [onTemplateSelected, goToStep]);
 

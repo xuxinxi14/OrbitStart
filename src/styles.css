@@ -1629,7 +1629,8 @@ kbd {
   align-items: center;
   gap: var(--space-2);
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-top: 8px;
+  padding-bottom: 4px;
 }
 
 .group-tabs button {
@@ -1865,14 +1866,15 @@ kbd {
 }
 
 .tile-actions {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 0;
   border-top: 1px solid var(--line);
 }
 
 .tile-actions button {
   display: grid;
+  flex: 1 1 0;
+  min-width: 0;
   place-items: center;
   height: calc(34px - var(--density-factor, 0) * 4px);
   border: 1px solid transparent;
@@ -6536,12 +6538,13 @@ kbd {
   outline: none;
 }
 
-.hotkey-input-container input.recording {
-  border-color: var(--teal, #27d7c6);
-  box-shadow: 0 0 12px rgba(39, 215, 198, 0.35);
-  background-color: rgba(39, 215, 198, 0.06);
-  animation: hotkey-pulse 1.6s infinite ease-in-out;
-  color: var(--teal-soft, #65f1e4);
+.hotkey-input-container input.recording,
+input.recording {
+  border-color: var(--teal, #27d7c6) !important;
+  box-shadow: 0 0 12px rgba(39, 215, 198, 0.35) !important;
+  background-color: rgba(39, 215, 198, 0.06) !important;
+  animation: hotkey-pulse 1.6s infinite ease-in-out !important;
+  color: var(--teal-soft, #65f1e4) !important;
 }
 
 @keyframes hotkey-pulse {
@@ -7371,4 +7374,118 @@ kbd {
   text-align: center;
   margin: 0;
   padding: 0;
+}
+
+/* Command Bar specific narrow overlay panel */
+.command-palette.command-bar-panel {
+  width: min(540px, calc(100vw - 48px)) !important;
+}
+
+/* Result meta tags layout */
+.result-meta-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.meta-group-tag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--line);
+  color: var(--soft) !important;
+  font-size: 11px !important;
+  font-style: normal;
+}
+
+.meta-type-tag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(39, 215, 198, 0.07);
+  border: 1px solid rgba(39, 215, 198, 0.18);
+  color: var(--accent) !important;
+  font-size: 11px !important;
+  font-style: normal;
+}
+
+/* --- Hotkey Binder & Group DnD Drag-and-Drop Styles --- */
+
+.group-tab-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.group-tab-btn {
+  /* Restricting any overriding of pointer-events to let useSortable work */
+  pointer-events: auto;
+}
+
+/* Tab Hotkey Badge */
+.tab-hotkey-badge {
+  position: absolute;
+  top: -6px;
+  right: -2px;
+  background: var(--accent);
+  color: var(--bg);
+  border: 1px solid color-mix(in srgb, var(--bg) 55%, transparent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: bold;
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 5;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: opacity 0.15s ease;
+}
+
+/* Bind Hotkey Button (Span) */
+.bind-hotkey-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface-2, var(--surface, #1e1e24));
+  border: 1px solid var(--line);
+  color: var(--soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease, background 0.2s ease, color 0.2s ease;
+  z-index: 6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.group-tab-wrapper:hover .bind-hotkey-btn {
+  opacity: 1;
+}
+
+.bind-hotkey-btn:hover {
+  transform: scale(1.1);
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+/* Keep badge visible on hover */
+.group-tab-wrapper:hover .tab-hotkey-badge {
+  opacity: 1;
+}
+
+/* Group Tab Dragging Styles */
+.group-tab-wrapper.dragging {
+  opacity: 0.35 !important;
+}
+
+.group-tab-wrapper.dragging button {
+  border-style: dashed !important;
+  opacity: 0.5 !important;
 }
