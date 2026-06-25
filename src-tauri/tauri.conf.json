@@ -33,6 +33,7 @@
     "icon": [
       "icons/icon.ico"
     ],
+    "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
         "installMode": "currentUser",
@@ -41,6 +42,15 @@
         "uninstallerIcon": "icons/icon.ico",
         "installerHooks": "windows/nsis-hooks.nsh"
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://raw.githubusercontent.com/xuxinxi14/OrbitStart/main/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3MEMxRDcxRTIxNzY4QjYKUldTMmFCZmljUjBNMTRHczdOb2hpQ1RoRGFqdTRjWlcrb3dLZmhJQmpJbkM1TXB0eGl3dENUOXYK"
     }
   }
 }

@@ -180,7 +180,8 @@ type AppDialogState =
   | { type: "batch-delete" }
   | { type: "batch-move"; groupId: string }
   | { type: "template"; value: string }
-  | { type: "group-hotkey"; groupId: string; value: string };
+  | { type: "group-hotkey"; groupId: string; value: string }
+  | { type: "app-update"; version: string; body: string; pendingUpdate: any };
 
 function getInitialView(): ViewId {
   if (typeof window === "undefined") return "dashboard";
@@ -751,6 +752,9 @@ export default function App() {
   const [backupJson, setBackupJson] = useState("");
   const [backupPath, setBackupPath] = useState("");
   const [dialog, setDialog] = useState<AppDialogState | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<number | null>(null);
+  const [updatingState, setUpdatingState] = useState<"idle" | "downloading" | "applying">("idle");
+  const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false);
   const [localAuxPanel, setLocalAuxPanel] = useState<AuxPanel | null>(null);
   const [busy, setBusy] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
@@ -929,6 +933,73 @@ export default function App() {
           setBusy(false);
         }
       }
+    }
+  };
+
+  const checkForUpdates = async (manual: boolean) => {
+    if (!isTauriRuntime()) {
+      if (manual) {
+        setToast("当前处于浏览器开发环境，无法执行自动更新。");
+      }
+      return;
+    }
+    setIsCheckingForUpdate(true);
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = await check();
+      if (update) {
+        setDialog({
+          type: "app-update",
+          version: update.version,
+          body: update.body || "",
+          pendingUpdate: update,
+        });
+      } else {
+        if (manual) {
+          setToast("当前已是最新版本 (v0.6.0)");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to check for updates:", err);
+      if (manual) {
+        setToast(`检查更新失败：${String(err)}`);
+      }
+    } finally {
+      setIsCheckingForUpdate(false);
+    }
+  };
+
+  const startAppUpdate = async (pendingUpdate: any) => {
+    setUpdateProgress(0);
+    setUpdatingState("downloading");
+    try {
+      let downloaded = 0;
+      let contentLength = 0;
+      await pendingUpdate.downloadAndInstall((event: any) => {
+        switch (event.event) {
+          case "Started":
+            contentLength = event.data.contentLength || 0;
+            break;
+          case "Progress":
+            downloaded += event.data.chunkLength;
+            if (contentLength > 0) {
+              setUpdateProgress(Math.round((downloaded / contentLength) * 100));
+            }
+            break;
+          case "Finished":
+            setUpdatingState("applying");
+            break;
+        }
+      });
+      setToast("更新包下载完成，应用即将自动重启...");
+      setTimeout(async () => {
+        const { relaunch } = await import("@tauri-apps/plugin-process");
+        await relaunch();
+      }, 1500);
+    } catch (err) {
+      console.error("Failed to download and install update:", err);
+      setToast(`下载更新失败：${String(err)}`);
+      setUpdatingState("idle");
     }
   };
 
@@ -3720,43 +3791,47 @@ export default function App() {
       );
     }
 
-    return (
-      <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
-        <form
-          className="modal-panel dialog-panel"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void confirmCreateTemplate(dialog.value);
-          }}
-        >
-          <div className="modal-head">
-            <div>
-              <p className="eyebrow">Plugin template</p>
-              <h2>创建插件模板</h2>
+    if (dialog.type === "template") {
+      return (
+        <section className="palette-backdrop centered-backdrop" role="dialog" aria-modal="true" onClick={(event) => { if (event.target === event.currentTarget) setDialog(null); }}>
+          <form
+            className="modal-panel dialog-panel"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmCreateTemplate(dialog.value);
+            }}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Plugin template</p>
+                <h2>创建插件模板</h2>
+              </div>
+              <button type="button" className="icon-action" onClick={() => setDialog(null)}>
+                <X size={18} />
+              </button>
             </div>
-            <button type="button" className="icon-action" onClick={() => setDialog(null)}>
-              <X size={18} />
-            </button>
-          </div>
-          <div className="dialog-body">
-            <label>
-              模板名称
-              <input
-                autoFocus
-                value={dialog.value}
-                onChange={(event) =>
-                  setDialog((current) => (current?.type === "template" ? { ...current, value: event.target.value } : current))
-                }
-              />
-            </label>
-          </div>
-          <div className="modal-actions">
-            <button type="button" className="secondary-action" onClick={() => setDialog(null)}>取消</button>
-            <button type="submit" className="primary-action" disabled={busy}>创建</button>
-          </div>
-        </form>
-      </section>
-    );
+            <div className="dialog-body">
+              <label>
+                模板名称
+                <input
+                  autoFocus
+                  value={dialog.value}
+                  onChange={(event) =>
+                    setDialog((current) => (current?.type === "template" ? { ...current, value: event.target.value } : current))
+                  }
+                />
+              </label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="secondary-action" onClick={() => setDialog(null)}>取消</button>
+              <button type="submit" className="primary-action" disabled={busy}>创建</button>
+            </div>
+          </form>
+        </section>
+      );
+    }
+
+    return null;
   };
 
   const renderContextMenu = () => {

@@ -5806,6 +5806,11 @@ pub fn run() {
             setup_global_shortcut(app)?;
             #[cfg(desktop)]
             setup_tray(app)?;
+            #[cfg(desktop)]
+            {
+                let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
+                let _ = app.handle().plugin(tauri_plugin_process::init());
+            }
             Ok(())
         })
         .on_window_event(|window, event| {

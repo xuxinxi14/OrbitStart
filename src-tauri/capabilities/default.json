@@ -17,6 +17,9 @@
     "core:window:allow-set-focus",
     "core:window:allow-start-dragging",
     "core:tray:default",
-    "global-shortcut:allow-is-registered"
+    "global-shortcut:allow-is-registered",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart"
   ]
 }
