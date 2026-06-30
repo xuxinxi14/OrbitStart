@@ -6,8 +6,9 @@
   left: 0;
   width: 100vw;
   height: 100vh;
+  box-sizing: border-box;
   background: transparent !important;
-  pointer-events: none;
+  pointer-events: auto;
   overflow: hidden;
   user-select: none;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -15,22 +16,12 @@
 
 .bubble-active-area {
   position: absolute;
-  top: 10px;
+  inset: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
   pointer-events: auto;
-  transition: all 180ms ease-out;
-  padding: 8px;
-}
-
-.bubble-active-area.align-left {
-  left: 10px;
-  flex-direction: row;
-}
-
-.bubble-active-area.align-right {
-  right: 10px;
-  flex-direction: row-reverse;
+  padding: 0;
 }
 
 /* Main Bubble */
@@ -39,212 +30,118 @@
   width: var(--main-size, 64px);
   height: var(--main-size, 64px);
   border-radius: 50%;
-  background: rgba(10, 15, 30, 0.85);
-  border: 1px solid rgba(55, 214, 191, 0.45);
-  box-shadow: 
-    0 4px 20px rgba(0, 0, 0, 0.4),
-    0 0 15px rgba(55, 214, 191, 0.15),
-    inset 0 0 12px rgba(55, 214, 191, 0.1);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  cursor: move;
-  transition: 
-    border-color 150ms ease,
-    box-shadow 150ms ease,
-    transform 150ms ease;
+  cursor: grab;
+  transition: filter 120ms ease;
   z-index: 10;
   overflow: visible;
+  touch-action: none;
+  -webkit-user-drag: none;
 }
 
 .main-bubble:hover,
 .main-bubble.hovered {
-  border-color: rgba(55, 214, 191, 0.95);
-  box-shadow: 
-    0 6px 24px rgba(0, 0, 0, 0.5),
-    0 0 25px rgba(55, 214, 191, 0.55),
-    inset 0 0 16px rgba(55, 214, 191, 0.25);
-  transform: scale(1.02);
+  filter: saturate(1.05);
 }
 
 .main-bubble:active {
-  transform: scale(0.98);
+  cursor: grabbing;
+  filter: brightness(0.95);
 }
 
 .bubble-img {
-  width: 90%;
-  height: 90%;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   pointer-events: none;
-}
-
-/* Shortcut Balls Container */
-.shortcut-balls-container {
-  display: flex;
-  align-items: center;
-  gap: var(--gap, 10px);
-  transition: 
-    max-width 180ms ease-out,
-    opacity 140ms ease-out,
-    transform 180ms ease-out;
-  overflow: visible;
-  height: var(--main-size, 64px);
-}
-
-.bubble-active-area.align-left .shortcut-balls-container {
-  padding-left: var(--gap, 10px);
-}
-
-.bubble-active-area.align-right .shortcut-balls-container {
-  padding-right: var(--gap, 10px);
-}
-
-.bubble-active-area.collapsed .shortcut-balls-container {
-  max-width: 0;
-  opacity: 0;
-  transform: scale(0.85);
-  pointer-events: none;
-}
-
-.bubble-active-area.expanded .shortcut-balls-container {
-  max-width: 300px;
-  opacity: 1;
-  transform: scale(1);
-  pointer-events: auto;
-}
-
-/* Shortcut Ball Wrapper */
-.shortcut-ball-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Shortcut Ball Button */
-.shortcut-ball {
-  width: var(--ball-size, 42px);
-  height: var(--ball-size, 42px);
-  border-radius: 50%;
-  background: rgba(13, 20, 38, 0.85);
-  border: 1px solid rgba(55, 214, 191, 0.3);
-  color: #37d6bf;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  outline: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: 
-    transform 150ms ease-out,
-    border-color 150ms,
-    color 150ms,
-    box-shadow 150ms;
-}
-
-.shortcut-ball:hover {
-  transform: scale(1.12);
-  color: #f6b95b;
-  border-color: rgba(246, 185, 91, 0.8);
-  box-shadow: 
-    0 0 16px rgba(246, 185, 91, 0.45),
-    0 6px 16px rgba(0, 0, 0, 0.45);
-}
-
-.shortcut-ball:active {
-  transform: scale(0.95);
-}
-
-/* Tooltips */
-.tooltip {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(4px);
-  background: rgba(8, 12, 26, 0.94);
-  border: 1px solid rgba(55, 214, 191, 0.35);
-  color: #ffffff;
-  padding: 5px 10px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  transition: 
-    opacity 140ms ease,
-    transform 140ms ease;
-  z-index: 100;
-}
-
-.shortcut-ball-wrapper:hover .tooltip {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
-}
-
-/* Custom Context Menu */
-.bubble-context-menu {
-  position: fixed;
-  background: rgba(12, 18, 36, 0.96);
-  border: 1px solid rgba(55, 214, 191, 0.4);
-  box-shadow: 
-    0 10px 30px rgba(0, 0, 0, 0.65),
-    0 0 15px rgba(55, 214, 191, 0.1);
-  border-radius: 8px;
-  width: 145px;
-  padding: 6px 0;
-  z-index: 1000;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  pointer-events: auto;
-  animation: contextMenuFadeIn 120ms ease-out;
-}
-
-@keyframes contextMenuFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-.bubble-context-menu button {
   display: block;
-  width: 100%;
-  padding: 7px 14px;
-  text-align: left;
-  background: transparent;
-  border: none;
-  color: #d1d5db;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: all 120ms ease;
+  -webkit-user-drag: none;
 }
 
-.bubble-context-menu button:hover {
-  background: rgba(55, 214, 191, 0.15);
-  color: #37d6bf;
+.bubble-menu-shell {
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(55, 214, 191, 0.22), transparent 30%),
+    linear-gradient(135deg, rgba(10, 15, 30, 0.96), rgba(17, 24, 39, 0.94));
+  border: 1px solid rgba(55, 214, 191, 0.24);
+  border-radius: 999px;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.36),
+    inset 0 0 24px rgba(55, 214, 191, 0.08);
+  overflow: hidden;
+  user-select: none;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, "Microsoft YaHei UI", sans-serif;
 }
 
-.bubble-context-menu .menu-divider {
+.bubble-menu-action {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  box-sizing: border-box;
   border: 0;
-  height: 1px;
-  background: rgba(55, 214, 191, 0.18);
-  margin: 6px 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #d9fff8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  box-shadow: none;
+  padding: 0;
+  transition: color 120ms ease, filter 120ms ease;
+  overflow: visible;
+  -webkit-user-drag: none;
 }
 
-.bubble-context-menu button.menu-danger {
-  color: #fca5a5;
+.bubble-menu-action:hover {
+  color: #ffffff;
+  filter: saturate(1.08);
 }
 
-.bubble-context-menu button.menu-danger:hover {
-  background: rgba(239, 68, 68, 0.18);
-  color: #ef4444;
+.bubble-menu-action:active {
+  filter: brightness(0.92);
+}
+
+.bubble-menu-action-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  display: block;
+  -webkit-user-drag: none;
+}
+
+.bubble-menu-action svg {
+  position: relative;
+  z-index: 1;
+  filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.55));
+}
+
+.bubble-menu-action span {
+  position: relative;
+  z-index: 1;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  line-height: 1.1;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.72);
 }

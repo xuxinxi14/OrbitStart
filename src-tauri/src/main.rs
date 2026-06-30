@@ -727,13 +727,6 @@ fn default_groups() -> Vec<OrbitGroup> {
             custom: false,
         },
         OrbitGroup {
-            id: "work".to_string(),
-            title: "工作区".to_string(),
-            icon: "PanelsTopLeft".to_string(),
-            description: "项目和动作链".to_string(),
-            custom: false,
-        },
-        OrbitGroup {
             id: "web".to_string(),
             title: "网址".to_string(),
             icon: "Globe".to_string(),
@@ -2948,6 +2941,90 @@ fn update_group_hotkey(app: tauri::AppHandle, group_id: String, new_hotkey: Opti
 }
 
 #[tauri::command]
+fn get_workspace_hotkeys() -> Result<std::collections::HashMap<String, String>, String> {
+    let conn = open_db()?;
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings WHERE key LIKE 'hotkey_workspace:%'")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|e| e.to_string())?;
+    let mut map = std::collections::HashMap::new();
+    for row in rows {
+        if let Ok((key, value)) = row {
+            if let Some(ws_id) = key.strip_prefix("hotkey_workspace:") {
+                map.insert(ws_id.to_string(), value);
+            }
+        }
+    }
+    Ok(map)
+}
+
+#[tauri::command]
+fn update_workspace_hotkey(app: tauri::AppHandle, workspace_id: String, new_hotkey: Option<String>) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+        let conn = open_db().map_err(|e| e.to_string())?;
+        let setting_key = format!("hotkey_workspace:{}", workspace_id);
+        let old_hotkey = setting(&conn, &setting_key, "").unwrap_or_default();
+
+        let shortcut_manager = app.global_shortcut();
+
+        if !old_hotkey.is_empty() {
+            if let Ok(old_shortcut) = old_hotkey.to_lowercase().parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                let _ = shortcut_manager.unregister(old_shortcut);
+            }
+        }
+
+        if let Some(ref hotkey) = new_hotkey {
+            if !hotkey.is_empty() {
+                let new_shortcut = hotkey
+                    .to_lowercase()
+                    .parse::<tauri_plugin_global_shortcut::Shortcut>()
+                    .map_err(|e| format!("解析快捷键失败，格式可能不正确: {}", e))?;
+                
+                let _ = shortcut_manager.register(new_shortcut);
+            }
+        }
+
+        if let Some(ref hotkey) = new_hotkey {
+            if !hotkey.is_empty() {
+                set_setting_value(&conn, &setting_key, hotkey)?;
+            } else {
+                conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                    .map_err(|e| e.to_string())?;
+            }
+        } else {
+            conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                .map_err(|e| e.to_string())?;
+        }
+
+        Ok(())
+    }
+    #[cfg(not(desktop))]
+    {
+        let conn = open_db().map_err(|e| e.to_string())?;
+        let setting_key = format!("hotkey_workspace:{}", workspace_id);
+        if let Some(ref hotkey) = new_hotkey {
+            if !hotkey.is_empty() {
+                set_setting_value(&conn, &setting_key, hotkey)?;
+            } else {
+                conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                    .map_err(|e| e.to_string())?;
+            }
+        } else {
+            conn.execute("DELETE FROM settings WHERE key = ?1", params![&setting_key])
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+}
+
+#[tauri::command]
 fn create_item(app: tauri::AppHandle, input: OrbitItemInput) -> Result<OrbitItem, String> {
     let conn = open_db()?;
     let item = insert_item(&conn, &input)?;
@@ -4326,7 +4403,7 @@ fn resolve_lnk_target(lnk_path: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
-fn win_shell_execute(target: &str, args: Option<&str>) -> Result<(), String> {
+fn win_shell_execute(target: &str, args: Option<&str>, working_dir: Option<&str>) -> Result<(), String> {
     let mut target_to_run = target.to_string();
     if target.to_lowercase().ends_with(".lnk") {
         if let Some(resolved) = resolve_lnk_target(target) {
@@ -4345,8 +4422,10 @@ fn win_shell_execute(target: &str, args: Option<&str>) -> Result<(), String> {
         None => std::ptr::null(),
     };
     
+    let custom_dir = working_dir.map(std::path::Path::new);
     let parent_dir = std::path::Path::new(&target_to_run).parent();
-    let dir_wide = parent_dir
+    let dir_wide = custom_dir
+        .or(parent_dir)
         .filter(|p| p.exists() && p.is_dir())
         .and_then(|p| p.to_str())
         .map(to_wide_chars);
@@ -4380,7 +4459,7 @@ fn launch_target(target: String) -> Result<String, String> {
 
     #[cfg(target_os = "windows")]
     {
-        win_shell_execute(&target, None)?;
+        win_shell_execute(&target, None, None)?;
         Ok(format!("已启动：{}", target))
     }
 
@@ -4392,10 +4471,31 @@ fn launch_target(target: String) -> Result<String, String> {
     }
 }
 
+#[tauri::command]
+fn launch_target_with_args(
+    target: String,
+    arguments: Option<String>,
+    working_directory: Option<String>,
+) -> Result<String, String> {
+    #[cfg(target_os = "windows")]
+    {
+        win_shell_execute(&target, arguments.as_deref(), working_directory.as_deref())?;
+        Ok(format!("已启动：{}", target))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (arguments, working_directory);
+        Err(format!(
+            "Launching is currently implemented on Windows only: {target}"
+        ))
+    }
+}
+
 fn launch_executable_with_args(target: &str, args_str: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        win_shell_execute(target, Some(args_str))
+        win_shell_execute(target, Some(args_str), None)
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -5070,6 +5170,30 @@ fn ensure_local_templates() -> Result<(), String> {
         .map_err(|error| format!("Failed to write hotkey plugin README: {error}"))?;
     }
 
+    let workspaces_plugin_root = plugins_dir()?.join("workspaces");
+    fs::create_dir_all(&workspaces_plugin_root)
+        .map_err(|error| format!("Failed to create workspaces plugin: {error}"))?;
+    fs::write(
+        workspaces_plugin_root.join("plugin.json"),
+        workspaces_plugin_manifest(),
+    )
+    .map_err(|error| format!("Failed to write workspaces plugin manifest: {error}"))?;
+    fs::write(
+        workspaces_plugin_root.join("main.ts"),
+        workspaces_plugin_source(),
+    )
+    .map_err(|error| format!("Failed to write workspaces plugin source: {error}"))?;
+    fs::write(
+        workspaces_plugin_root.join("orbitstart-plugin-api.d.ts"),
+        hello_plugin_api_types(),
+    )
+    .map_err(|error| format!("Failed to write workspaces plugin API types: {error}"))?;
+    fs::write(
+        workspaces_plugin_root.join("README.md"),
+        workspaces_plugin_readme(),
+    )
+    .map_err(|error| format!("Failed to write workspaces plugin README: {error}"))?;
+
     let theme_root = themes_dir()?.join("aurora-focus");
     if !theme_root.exists() {
         fs::create_dir_all(&theme_root)
@@ -5608,7 +5732,7 @@ async fn open_aux_window(app: tauri::AppHandle, panel: String) -> Result<(), Str
         return Ok(());
     }
 
-    let url = WebviewUrl::App("index.html".into());
+    let url = WebviewUrl::App(format!("index.html?label={}", label).into());
     WebviewWindowBuilder::new(&app, label, url)
         .title(title)
         .inner_size(width, height)
@@ -5694,6 +5818,46 @@ fn set_autostart_enabled(enabled: bool) -> Result<(), String> {
 }
 
 #[cfg(desktop)]
+#[cfg(all(desktop, target_os = "windows"))]
+mod win32 {
+    use std::ffi::c_void;
+
+    type HWND = *mut c_void;
+    type HRGN = *mut c_void;
+    type BOOL = i32;
+
+    extern "system" {
+        pub fn CreateEllipticRgn(x1: i32, y1: i32, x2: i32, y2: i32) -> HRGN;
+        pub fn CreateRoundRectRgn(x1: i32, y1: i32, x2: i32, y2: i32, w: i32, h: i32) -> HRGN;
+        pub fn SetWindowRgn(hWnd: HWND, hRgn: HRGN, bRedraw: BOOL) -> i32;
+        pub fn DeleteObject(ho: *mut c_void) -> BOOL;
+    }
+}
+
+#[cfg(all(desktop, target_os = "windows"))]
+fn apply_elliptic_region(_window: &tauri::WebviewWindow) -> Result<(), String> {
+    // Return Ok(()) to let Tauri's native window transparency handle click-through
+    // and prevent Windows from drawing native white border frames (white crescent shape).
+    Ok(())
+}
+
+#[cfg(all(desktop, target_os = "windows"))]
+fn apply_round_rect_region(_window: &tauri::WebviewWindow) -> Result<(), String> {
+    // Return Ok(()) to let Tauri's native window transparency handle click-through
+    // and prevent Windows from drawing native white border frames.
+    Ok(())
+}
+
+#[cfg(all(desktop, not(target_os = "windows")))]
+fn apply_elliptic_region(_window: &tauri::WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(all(desktop, not(target_os = "windows")))]
+fn apply_round_rect_region(_window: &tauri::WebviewWindow) -> Result<(), String> {
+    Ok(())
+}
+
 #[cfg(desktop)]
 fn is_bubble_enabled_and_show_on_hide() -> bool {
     if let Ok(conn) = open_db() {
@@ -5712,11 +5876,15 @@ fn create_bubble_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, 
     }
     let conn = open_db()?;
     let always_on_top = setting(&conn, "bubble_always_on_top", "true").unwrap_or_default() == "true";
+    let size_val = setting(&conn, "bubble_size", "64")
+        .unwrap_or_default()
+        .parse::<f64>()
+        .unwrap_or(64.0);
     
-    let url = WebviewUrl::App("index.html".into());
+    let url = WebviewUrl::App("index.html?label=floating-bubble".into());
     let bubble = WebviewWindowBuilder::new(app, "floating-bubble", url)
         .title("OrbitStart Bubble")
-        .inner_size(380.0, 120.0)
+        .inner_size(size_val, size_val)
         .decorations(false)
         .resizable(false)
         .transparent(true)
@@ -5726,7 +5894,35 @@ fn create_bubble_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, 
         .build()
         .map_err(|error| format!("Failed to create bubble window: {error}"))?;
         
+    let _ = apply_elliptic_region(&bubble);
+        
     Ok(bubble)
+}
+
+#[cfg(desktop)]
+fn create_bubble_menu_window(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, String> {
+    if let Some(menu) = app.get_webview_window("floating-bubble-menu") {
+        return Ok(menu);
+    }
+    let conn = open_db()?;
+    let always_on_top = setting(&conn, "bubble_always_on_top", "true").unwrap_or_default() == "true";
+    
+    let url = WebviewUrl::App("index.html?label=floating-bubble-menu".into());
+    let menu = WebviewWindowBuilder::new(app, "floating-bubble-menu", url)
+        .title("OrbitStart Bubble Menu")
+        .inner_size(340.0, 72.0)
+        .decorations(false)
+        .resizable(false)
+        .transparent(true)
+        .always_on_top(always_on_top)
+        .skip_taskbar(true)
+        .visible(false)
+        .build()
+        .map_err(|error| format!("Failed to create bubble menu window: {error}"))?;
+        
+    let _ = apply_round_rect_region(&menu);
+    
+    Ok(menu)
 }
 
 #[cfg(desktop)]
@@ -5746,6 +5942,9 @@ fn show_bubble_window(app: &tauri::AppHandle) {
 fn hide_bubble_window(app: &tauri::AppHandle) {
     if let Some(bubble) = app.get_webview_window("floating-bubble") {
         let _ = bubble.close();
+    }
+    if let Some(menu) = app.get_webview_window("floating-bubble-menu") {
+        let _ = menu.close();
     }
 }
 
@@ -5790,6 +5989,87 @@ fn exit_floating_mode_and_show_main(app: tauri::AppHandle, action: Option<String
 }
 
 #[tauri::command]
+fn begin_bubble_drag(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(bubble) = app.get_webview_window("floating-bubble") {
+            let _ = bubble.start_dragging();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn show_bubble_menu_window(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        let menu = if let Some(m) = app.get_webview_window("floating-bubble-menu") {
+            let _ = m.show();
+            let _ = m.unminimize();
+            let _ = m.set_focus();
+            m
+        } else {
+            let m = create_bubble_menu_window(&app)?;
+            let _ = m.show();
+            let _ = m.unminimize();
+            let _ = m.set_focus();
+            m
+        };
+
+        if let Some(bubble) = app.get_webview_window("floating-bubble") {
+            if let Ok(bubble_pos) = bubble.outer_position() {
+                if let Ok(bubble_size) = bubble.outer_size() {
+                    if let Ok(Some(monitor)) = bubble.current_monitor() {
+                        let scale_factor = monitor.scale_factor();
+                        let monitor_pos = monitor.position();
+                        let monitor_size = monitor.size();
+                        
+                        let logical_gap = 12.0;
+                        let logical_menu_width = 340.0;
+                        let logical_menu_height = 72.0;
+                        
+                        let physical_gap = (logical_gap * scale_factor) as i32;
+                        let physical_menu_width = (logical_menu_width * scale_factor) as u32;
+                        let physical_menu_height = (logical_menu_height * scale_factor) as u32;
+                        
+                        let monitor_center_x = monitor_pos.x + (monitor_size.width as i32) / 2;
+                        let bubble_center_x = bubble_pos.x + (bubble_size.width as i32) / 2;
+                        let is_left = bubble_center_x < monitor_center_x;
+                        
+                        let menu_x = if is_left {
+                            bubble_pos.x + bubble_size.width as i32 + physical_gap
+                        } else {
+                            bubble_pos.x - physical_menu_width as i32 - physical_gap
+                        };
+                        
+                        let bubble_center_y = bubble_pos.y + (bubble_size.height as i32) / 2;
+                        let menu_y = bubble_center_y - (physical_menu_height as i32) / 2;
+                        
+                        let min_y = monitor_pos.y + (10.0 * scale_factor) as i32;
+                        let max_y = monitor_pos.y + monitor_size.height as i32 - (10.0 * scale_factor) as i32 - physical_menu_height as i32;
+                        let menu_y = menu_y.clamp(min_y, max_y);
+                        
+                        let _ = menu.set_position(tauri::PhysicalPosition::new(menu_x, menu_y));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_bubble_menu_window(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        if let Some(menu) = app.get_webview_window("floating-bubble-menu") {
+            let _ = menu.hide();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn set_bubble_setting(app: tauri::AppHandle, key: String, value: String) -> Result<CatalogSnapshot, String> {
     let conn = open_db()?;
     set_setting_value(&conn, &key, &value)?;
@@ -5798,6 +6078,17 @@ fn set_bubble_setting(app: tauri::AppHandle, key: String, value: String) -> Resu
     if let Some(bubble) = app.get_webview_window("floating-bubble") {
         if key == "bubble_always_on_top" {
             let _ = bubble.set_always_on_top(value == "true");
+        }
+        if key == "bubble_size" {
+            if let Ok(size) = value.parse::<f64>() {
+                let _ = bubble.set_size(tauri::LogicalSize::new(size, size));
+                let _ = apply_elliptic_region(&bubble);
+            }
+        }
+    }
+    if let Some(menu) = app.get_webview_window("floating-bubble-menu") {
+        if key == "bubble_always_on_top" {
+            let _ = menu.set_always_on_top(value == "true");
         }
     }
     
@@ -5912,6 +6203,26 @@ fn handle_global_shortcut_press(app: &tauri::AppHandle, shortcut: &tauri_plugin_
                 }
             }
         }
+
+        // 动态检查工作区绑定快捷键并触发运行
+        if let Ok(mut stmt) = conn.prepare("SELECT key, value FROM settings WHERE key LIKE 'hotkey_workspace:%'") {
+            if let Ok(rows) = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))) {
+                for row in rows {
+                    if let Ok((key, value)) = row {
+                        if !value.is_empty() {
+                            if let Ok(sh) = value.to_lowercase().parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                                if shortcut == &sh {
+                                    if let Some(workspace_id) = key.strip_prefix("hotkey_workspace:") {
+                                        let _ = app.emit("orbit://run-workspace", workspace_id.to_string());
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -5961,6 +6272,26 @@ fn setup_global_shortcut(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
                     }
                 }
             }
+
+            // 动态注册从数据库读取的工作区绑定快捷键
+            if let Ok(mut stmt) = conn.prepare("SELECT key, value FROM settings WHERE key LIKE 'hotkey_workspace:%'") {
+                if let Ok(rows) = stmt.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))) {
+                    for row in rows {
+                        if let Ok((key, value)) = row {
+                            if !value.is_empty() {
+                                if let Ok(sh) = value.to_lowercase().parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                                    if let Err(e) = app.global_shortcut().register(sh) {
+                                        eprintln!(
+                                            "Failed to register workspace shortcut '{}' for workspace '{}': {}",
+                                            value, key, e
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     Ok(())
@@ -6000,6 +6331,488 @@ fn setup_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     builder.build(app)?;
     Ok(())
+}
+
+#[tauri::command]
+async fn run_script(
+    script_type: String,
+    path: Option<String>,
+    content: Option<String>,
+) -> Result<bool, String> {
+    use std::fs;
+    use std::process::Command as ProcessCommand;
+
+    let is_temp_file = content.is_some();
+    let script_file_path = if let Some(p) = path {
+        p
+    } else if let Some(c) = content {
+        let temp_dir = std::env::temp_dir();
+        let extension = if script_type.to_lowercase() == "powershell" || script_type.to_lowercase() == "ps1" {
+            "ps1"
+        } else {
+            "bat"
+        };
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
+        let file_name = format!("orbitstart_ws_{}.{}", timestamp, extension);
+        let file_path = temp_dir.join(file_name);
+        fs::write(&file_path, c).map_err(|e| format!("Failed to write temp script file: {}", e))?;
+        file_path.to_string_lossy().to_string()
+    } else {
+        return Err("No path or content provided for script execution".to_string());
+    };
+
+    let script_type_lower = script_type.to_lowercase();
+    let mut cmd = if script_type_lower == "powershell" || script_type_lower == "ps1" {
+        let mut c = ProcessCommand::new("powershell.exe");
+        c.args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            &script_file_path,
+        ]);
+        c
+    } else {
+        let mut c = ProcessCommand::new("cmd.exe");
+        c.args(["/c", &script_file_path]);
+        c
+    };
+
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    match cmd.status() {
+        Ok(status) => {
+            if is_temp_file {
+                let _ = fs::remove_file(script_file_path);
+            }
+            Ok(status.success())
+        }
+        Err(e) => {
+            if is_temp_file {
+                let _ = fs::remove_file(script_file_path);
+            }
+            Err(format!("Failed to execute script: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+fn check_process_running(process_name: String) -> Result<bool, String> {
+    use std::process::Command as ProcessCommand;
+    let mut cmd = ProcessCommand::new("tasklist.exe");
+    cmd.args(["/nh", "/fi", &format!("imagename eq {}", process_name)]);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    let output = cmd.output().map_err(|e| format!("Failed to run tasklist: {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+    Ok(stdout.contains(&process_name.to_lowercase()))
+}
+
+#[tauri::command]
+fn check_port_open(address: String) -> Result<bool, String> {
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+    let addr = if !address.contains(':') {
+        format!("{}:80", address)
+    } else {
+        address.clone()
+    };
+    match addr.to_socket_addrs() {
+        Ok(mut addrs) => {
+            if let Some(socket_addr) = addrs.next() {
+                match TcpStream::connect_timeout(&socket_addr, Duration::from_millis(500)) {
+                    Ok(_) => Ok(true),
+                    Err(_) => Ok(false)
+                }
+            } else {
+                Err("No valid socket address found".to_string())
+            }
+        }
+        Err(e) => Err(format!("Invalid address format: {}", e))
+    }
+}
+
+#[tauri::command]
+fn check_path_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
+}
+
+#[tauri::command]
+fn check_url_accessible(url: String) -> bool {
+    use std::process::Command as ProcessCommand;
+    let script = format!("try {{ $r = Invoke-WebRequest -Uri '{}' -UseBasicParsing -TimeoutSec 2; exit ($r.StatusCode -eq 200 -or $r.StatusCode -eq 302) ? 0 : 1 }} catch {{ exit 1 }}", url);
+    let mut cmd = ProcessCommand::new("powershell.exe");
+    cmd.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script]);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    match cmd.status() {
+        Ok(status) => status.success(),
+        Err(_) => false
+    }
+}
+
+#[tauri::command]
+fn workspaces_pick_file(filter: String, title: String) -> Result<Option<String>, String> {
+    pick_file_path(&filter, &title)
+}
+
+#[tauri::command]
+fn workspaces_pick_folder() -> Result<Option<String>, String> {
+    pick_folder_path()
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkspaceWindowLayout {
+    pub process_name: String,
+    pub window_title: Option<String>,
+    pub executable_path: Option<String>,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub is_maximized: Option<bool>,
+    pub captured_at: String,
+    pub always_on_top: Option<bool>,
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct RECT {
+    left: i32,
+    top: i32,
+    right: i32,
+    bottom: i32,
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct POINT {
+    x: i32,
+    y: i32,
+}
+
+#[cfg(target_os = "windows")]
+#[repr(C)]
+struct WINDOWPLACEMENT {
+    length: u32,
+    flags: u32,
+    show_cmd: u32,
+    min_position: POINT,
+    max_position: POINT,
+    normal_position: RECT,
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "user32")]
+extern "system" {
+    fn EnumWindows(
+        lpEnumFunc: unsafe extern "system" fn(*mut std::ffi::c_void, isize) -> i32,
+        lParam: isize,
+    ) -> i32;
+    fn IsWindowVisible(hwnd: *mut std::ffi::c_void) -> i32;
+    fn GetWindowTextW(
+        hwnd: *mut std::ffi::c_void,
+        lpString: *mut u16,
+        nMaxCount: i32,
+    ) -> i32;
+    fn GetWindowThreadProcessId(hwnd: *mut std::ffi::c_void, lpdwProcessId: *mut u32) -> u32;
+    fn GetWindowRect(hwnd: *mut std::ffi::c_void, lpRect: *mut RECT) -> i32;
+    fn GetWindowPlacement(hwnd: *mut std::ffi::c_void, lpwndpl: *mut WINDOWPLACEMENT) -> i32;
+    fn GetWindowLongW(hwnd: *mut std::ffi::c_void, nIndex: i32) -> i32;
+    fn GetClassNameW(hwnd: *mut std::ffi::c_void, lpClassName: *mut u16, nMaxCount: i32) -> i32;
+    fn SetWindowPos(
+        hwnd: *mut std::ffi::c_void,
+        hwndInsertAfter: *mut std::ffi::c_void,
+        x: i32,
+        y: i32,
+        cx: i32,
+        cy: i32,
+        uFlags: u32,
+    ) -> i32;
+    fn ShowWindow(hwnd: *mut std::ffi::c_void, nCmdShow: i32) -> i32;
+    fn MonitorFromPoint(pt: POINT, dwFlags: u32) -> *mut std::ffi::c_void;
+    fn SetForegroundWindow(hwnd: *mut std::ffi::c_void) -> i32;
+    fn SetActiveWindow(hwnd: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+}
+
+#[cfg(target_os = "windows")]
+#[link(name = "kernel32")]
+extern "system" {
+    fn OpenProcess(dwDesiredAccess: u32, bInheritHandle: i32, dwProcessId: u32) -> *mut std::ffi::c_void;
+    fn CloseHandle(hObject: *mut std::ffi::c_void) -> i32;
+    fn QueryFullProcessImageNameW(
+        hProcess: *mut std::ffi::c_void,
+        dwFlags: u32,
+        lpExeName: *mut u16,
+        lpdwSize: *mut u32,
+    ) -> i32;
+    fn GetCurrentProcessId() -> u32;
+}
+
+#[cfg(target_os = "windows")]
+struct WindowMatchQuery {
+    process_name: String,
+    window_title: Option<String>,
+    executable_path: Option<String>,
+    found_hwnd: Option<*mut std::ffi::c_void>,
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn enum_windows_callback(hwnd: *mut std::ffi::c_void, lparam: isize) -> i32 {
+    let list = &mut *(lparam as *mut Vec<WorkspaceWindowLayout>);
+    
+    if IsWindowVisible(hwnd) == 0 {
+        return 1;
+    }
+    
+    let mut title_buf = [0u16; 512];
+    let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 512);
+    if len <= 0 {
+        return 1;
+    }
+    let window_title = String::from_utf16_lossy(&title_buf[..len as usize]);
+    
+    let style = GetWindowLongW(hwnd, -16);
+    if (style & 0x40000000) != 0 { // WS_CHILD
+        return 1;
+    }
+    let ex_style = GetWindowLongW(hwnd, -20);
+    if (ex_style & 0x00000080) != 0 { // WS_EX_TOOLWINDOW
+        return 1;
+    }
+    
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, &mut pid);
+    if pid == 0 {
+        return 1;
+    }
+    
+    let h_process = OpenProcess(0x1000, 0, pid);
+    let mut exe_path = "unknown".to_string();
+    let mut process_name = "unknown.exe".to_string();
+    
+    if !h_process.is_null() {
+        let mut path_buf = [0u16; 1024];
+        let mut size: u32 = 1024;
+        let success = QueryFullProcessImageNameW(h_process, 0, path_buf.as_mut_ptr(), &mut size);
+        CloseHandle(h_process);
+        
+        if success != 0 {
+            exe_path = String::from_utf16_lossy(&path_buf[..size as usize]);
+            process_name = std::path::Path::new(&exe_path)
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "unknown.exe".to_string());
+        }
+    }
+    
+    let exe_path_lower = exe_path.to_lowercase();
+    if exe_path_lower.contains("explorer.exe") {
+        let mut class_buf = [0u16; 256];
+        let class_len = GetClassNameW(hwnd, class_buf.as_mut_ptr(), 256);
+        let class_name = if class_len > 0 {
+            String::from_utf16_lossy(&class_buf[..class_len as usize])
+        } else {
+            "".to_string()
+        };
+        if class_name != "CabinetWClass" {
+            return 1;
+        }
+    } else if exe_path_lower.contains("searchhost.exe")
+        || exe_path_lower.contains("shellexperiencehost.exe")
+        || exe_path_lower.contains("startmenuexperiencehost.exe")
+        || exe_path_lower.contains("taskmgr.exe")
+        || exe_path_lower.contains("systemsettings.exe")
+    {
+        return 1;
+    }
+    
+    let mut rect = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+    if GetWindowRect(hwnd, &mut rect) == 0 {
+        return 1;
+    }
+    
+    let mut placement = WINDOWPLACEMENT {
+        length: std::mem::size_of::<WINDOWPLACEMENT>() as u32,
+        flags: 0,
+        show_cmd: 0,
+        min_position: POINT { x: 0, y: 0 },
+        max_position: POINT { x: 0, y: 0 },
+        normal_position: RECT { left: 0, top: 0, right: 0, bottom: 0 },
+    };
+    
+    let is_maximized = if GetWindowPlacement(hwnd, &mut placement) != 0 {
+        Some(placement.show_cmd == 3)
+    } else {
+        Some(false)
+    };
+    
+    let width = rect.right - rect.left;
+    let height = rect.bottom - rect.top;
+    
+    if width < 100 || height < 100 {
+        return 1;
+    }
+    
+    list.push(WorkspaceWindowLayout {
+        process_name,
+        window_title: Some(window_title),
+        executable_path: Some(exe_path),
+        x: rect.left,
+        y: rect.top,
+        width,
+        height,
+        is_maximized,
+        captured_at: "".to_string(),
+        always_on_top: Some(false),
+    });
+    
+    1
+}
+
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn enum_windows_match_callback(hwnd: *mut std::ffi::c_void, lparam: isize) -> i32 {
+    let query = &mut *(lparam as *mut WindowMatchQuery);
+    
+    if IsWindowVisible(hwnd) == 0 {
+        return 1;
+    }
+    
+    let mut pid: u32 = 0;
+    GetWindowThreadProcessId(hwnd, &mut pid);
+    if pid == 0 {
+        return 1;
+    }
+    
+    let h_process = OpenProcess(0x1000, 0, pid);
+    let mut path_buf = [0u16; 1024];
+    let mut size: u32 = 1024;
+    let success = if !h_process.is_null() {
+        let ok = QueryFullProcessImageNameW(h_process, 0, path_buf.as_mut_ptr(), &mut size);
+        CloseHandle(h_process);
+        ok
+    } else {
+        0
+    };
+    
+    if success != 0 {
+        let exe_path = String::from_utf16_lossy(&path_buf[..size as usize]);
+        let process_name = std::path::Path::new(&exe_path)
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
+            
+        let is_proc_match = if let Some(ref target_path) = query.executable_path {
+            target_path.to_lowercase() == exe_path.to_lowercase()
+        } else {
+            query.process_name.to_lowercase() == process_name.to_lowercase()
+        };
+        
+        if is_proc_match {
+            if let Some(ref target_title) = query.window_title {
+                let mut title_buf = [0u16; 512];
+                let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 512);
+                if len > 0 {
+                    let title = String::from_utf16_lossy(&title_buf[..len as usize]);
+                    if !title.to_lowercase().contains(&target_title.to_lowercase()) {
+                        return 1;
+                    }
+                } else {
+                    return 1;
+                }
+            }
+            
+            query.found_hwnd = Some(hwnd);
+            return 0;
+        }
+    }
+    
+    1
+}
+
+#[tauri::command]
+fn workspaces_capture_active_windows() -> Result<Vec<WorkspaceWindowLayout>, String> {
+    let mut list: Vec<WorkspaceWindowLayout> = Vec::new();
+    #[cfg(target_os = "windows")]
+    unsafe {
+        EnumWindows(enum_windows_callback, &mut list as *mut Vec<WorkspaceWindowLayout> as isize);
+        
+        let mut log = String::new();
+        log.push_str(&format!("Captured Windows Count: {}\n", list.len()));
+        for (i, win) in list.iter().enumerate() {
+            log.push_str(&format!(
+                "[{}] Process: '{}', Title: '{:?}', Path: '{:?}', Rect: ({}, {}, {}, {})\n",
+                i, win.process_name, win.window_title, win.executable_path, win.x, win.y, win.width, win.height
+            ));
+        }
+        let temp_path = std::env::temp_dir().join("orbitstart_capture_debug.log");
+        let _ = std::fs::write(temp_path, log);
+    }
+    Ok(list)
+}
+
+#[tauri::command]
+fn workspaces_apply_window_layout(layout: WorkspaceWindowLayout) -> bool {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let mut query = WindowMatchQuery {
+            process_name: layout.process_name.clone(),
+            window_title: layout.window_title.clone(),
+            executable_path: layout.executable_path.clone(),
+            found_hwnd: None,
+        };
+        
+        EnumWindows(enum_windows_match_callback, &mut query as *mut WindowMatchQuery as isize);
+        
+        if let Some(hwnd) = query.found_hwnd {
+            ShowWindow(hwnd, 9); // SW_RESTORE
+            SetForegroundWindow(hwnd);
+            SetActiveWindow(hwnd);
+            
+            let hwnd_insert_after = if layout.always_on_top.unwrap_or(false) {
+                -1_isize as *mut std::ffi::c_void // HWND_TOPMOST
+            } else {
+                -2_isize as *mut std::ffi::c_void // HWND_NOTOPMOST
+            };
+
+            if layout.is_maximized.unwrap_or(false) {
+                ShowWindow(hwnd, 3); // SW_SHOWMAXIMIZED
+            } else {
+                let h_monitor = MonitorFromPoint(POINT { x: layout.x, y: layout.y }, 0);
+                let (final_x, final_y) = if h_monitor.is_null() {
+                    (100, 100)
+                } else {
+                    (layout.x, layout.y)
+                };
+
+                SetWindowPos(
+                    hwnd,
+                    hwnd_insert_after,
+                    final_x,
+                    final_y,
+                    layout.width,
+                    layout.height,
+                    0x0040 | 0x0004 | 0x0010
+                );
+            }
+            return true;
+        }
+    }
+    false
 }
 
 pub fn run() {
@@ -6043,6 +6856,7 @@ pub fn run() {
             delete_item,
             launch_item,
             launch_target,
+            launch_target_with_args,
             scan_shortcuts,
             scan_browser_bookmarks,
             update_global_hotkey,
@@ -6069,7 +6883,21 @@ pub fn run() {
             open_bubble_window,
             enter_floating_mode,
             exit_floating_mode_and_show_main,
-            set_bubble_setting
+            set_bubble_setting,
+            begin_bubble_drag,
+            show_bubble_menu_window,
+            hide_bubble_menu_window,
+            run_script,
+            check_process_running,
+            check_port_open,
+            check_path_exists,
+            check_url_accessible,
+            workspaces_pick_file,
+            workspaces_pick_folder,
+            workspaces_capture_active_windows,
+            workspaces_apply_window_layout,
+            get_workspace_hotkeys,
+            update_workspace_hotkey
         ])
         .setup(|app| {
             let _ = open_db();
@@ -6081,6 +6909,9 @@ pub fn run() {
             {
                 let _ = app.handle().plugin(tauri_plugin_updater::Builder::new().build());
                 let _ = app.handle().plugin(tauri_plugin_process::init());
+                let _ = app.handle().plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+                    show_and_focus_main(app);
+                }));
             }
             Ok(())
         })
@@ -6114,4 +6945,87 @@ pub fn run() {
 
 fn main() {
     run();
+}
+
+fn workspaces_plugin_manifest() -> &'static str {
+    r#"{
+  "id": "workspaces",
+  "name": "Workspaces",
+  "version": "0.1.0",
+  "description": "用于 Windows 桌面管理的工作区实用工具，一键按顺序启动相关应用与配置。",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "catalog:read", "label": "读取已有资源列表", "risk": "medium" },
+    { "id": "shell:open", "label": "启动文件、程序与目标", "risk": "medium" },
+    { "id": "ui:toast", "label": "显示通知消息", "risk": "low" },
+    { "id": "storage:plugin", "label": "读写本插件的本地存储数据", "risk": "low" }
+  ],
+  "contributes": {
+    "commands": 20,
+    "searchProviders": 1,
+    "themes": 0,
+    "views": 1
+  }
+}
+"#
+}
+
+fn workspaces_plugin_source() -> &'static str {
+    include_str!("../../plugins/workspaces/main.ts")
+}
+
+fn workspaces_plugin_readme() -> &'static str {
+    "Workspaces plugin for OrbitStart."
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_print_windows() {
+        unsafe {
+            unsafe extern "system" fn test_callback(hwnd: *mut std::ffi::c_void, _lparam: isize) -> i32 {
+                let visible = IsWindowVisible(hwnd);
+                let mut title_buf = [0u16; 512];
+                let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 512);
+                let window_title = if len > 0 {
+                    String::from_utf16_lossy(&title_buf[..len as usize])
+                } else {
+                    "".to_string()
+                };
+                
+                let style = GetWindowLongW(hwnd, -16);
+                let ex_style = GetWindowLongW(hwnd, -20);
+                
+                let mut pid = 0;
+                GetWindowThreadProcessId(hwnd, &mut pid);
+                
+                let h_process = OpenProcess(0x1000, 0, pid);
+                let mut exe_path = "unknown".to_string();
+                let mut process_name = "unknown.exe".to_string();
+                if !h_process.is_null() {
+                    let mut path_buf = [0u16; 1024];
+                    let mut size = 1024;
+                    if QueryFullProcessImageNameW(h_process, 0, path_buf.as_mut_ptr(), &mut size) != 0 {
+                        exe_path = String::from_utf16_lossy(&path_buf[..size as usize]);
+                        if let Some(f) = std::path::Path::new(&exe_path).file_name() {
+                            process_name = f.to_string_lossy().into_owned();
+                        }
+                    }
+                    CloseHandle(h_process);
+                }
+                
+                if visible != 0 || len > 0 {
+                    println!(
+                        "HWND: {:?}, Title: '{}', Proc: '{}', Visible: {}, Style: 0x{:X}, ExStyle: 0x{:X}, PID: {}",
+                        hwnd, window_title, process_name, visible, style, ex_style, pid
+                    );
+                }
+                1
+            }
+            EnumWindows(test_callback, 0);
+        }
+    }
 }

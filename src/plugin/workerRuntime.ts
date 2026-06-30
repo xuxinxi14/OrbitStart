@@ -192,6 +192,37 @@ function createPluginContext() {
       open(vaultId, relativePath, lineNumber) {
         return hostRequest("obsidian:open", { vaultId, relativePath, lineNumber });
       }
+    },
+    catalog: {
+      getSnapshot() {
+        return hostRequest("catalog:get_snapshot", {});
+      }
+    },
+    launcher: {
+      launchItem(id) {
+        return hostRequest("launcher:launch_item", { id });
+      },
+      launchTarget(target, arguments) {
+        return hostRequest("launcher:launch_target", { target, arguments });
+      },
+      runScript(scriptType, path, content) {
+        return hostRequest("launcher:run_script", { scriptType, path, content });
+      },
+      checkProcessRunning(processName) {
+        return hostRequest("launcher:check_process_running", { processName });
+      },
+      checkPortOpen(address) {
+        return hostRequest("launcher:check_port_open", { address });
+      },
+      checkPathExists(path) {
+        return hostRequest("launcher:check_path_exists", { path });
+      },
+      checkUrlAccessible(url) {
+        return hostRequest("launcher:check_url_accessible", { url });
+      },
+      applyWindowLayout(layout) {
+        return hostRequest("launcher:apply_window_layout", { layout });
+      }
     }
   };
 }
@@ -524,11 +555,13 @@ export class WorkerPluginRuntime {
     }
   }
 
-  private resolveHostRequest(api: string, payload: Record<string, unknown>) {
+  private async resolveHostRequest(api: string, payload: Record<string, unknown>) {
     if (api.startsWith("storage:")) this.requirePermission("storage:plugin");
     if (api.startsWith("settings:")) this.requirePermission("settings:plugin");
     if (api.startsWith("trips:")) this.requirePermission("trips:read");
     if (api.startsWith("obsidian:")) this.requirePermission("obsidian:read");
+    if (api.startsWith("catalog:")) this.requirePermission("catalog:read");
+    if (api.startsWith("launcher:")) this.requirePermission("shell:open");
 
     if (api === "storage:get") return this.readScopedValue("storage", payload.key, payload.fallbackValue);
     if (api === "storage:set") return this.writeScopedValue("storage", payload.key, payload.value);
@@ -557,6 +590,45 @@ export class WorkerPluginRuntime {
         return true;
       }
       return openObsidianNote(vaultId, relativePath, lineNumber);
+    }
+    if (api === "catalog:get_snapshot") {
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("catalog_snapshot"));
+    }
+    if (api === "launcher:launch_item") {
+      const id = String(payload.id ?? "");
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("launch_item", { id }));
+    }
+    if (api === "launcher:launch_target") {
+      const target = String(payload.target ?? "");
+      const arguments_ = payload.arguments ? String(payload.arguments) : null;
+      const workingDirectory = payload.workingDirectory ? String(payload.workingDirectory) : null;
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("launch_target_with_args", { target, arguments: arguments_, workingDirectory }));
+    }
+    if (api === "launcher:run_script") {
+      const scriptType = String(payload.scriptType ?? "");
+      const path = payload.path ? String(payload.path) : null;
+      const content = payload.content ? String(payload.content) : null;
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("run_script", { scriptType, path, content }));
+    }
+    if (api === "launcher:check_process_running") {
+      const processName = String(payload.processName ?? "");
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("check_process_running", { processName }));
+    }
+    if (api === "launcher:check_port_open") {
+      const address = String(payload.address ?? "");
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("check_port_open", { address }));
+    }
+    if (api === "launcher:check_path_exists") {
+      const path = String(payload.path ?? "");
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("check_path_exists", { path }));
+    }
+    if (api === "launcher:check_url_accessible") {
+      const url = String(payload.url ?? "");
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("check_url_accessible", { url }));
+    }
+    if (api === "launcher:apply_window_layout") {
+      const layout = payload.layout;
+      return import("@tauri-apps/api/core").then(({ invoke }) => invoke("workspaces_apply_window_layout", { layout }));
     }
     throw new Error(`Unknown host API: ${api}`);
   }

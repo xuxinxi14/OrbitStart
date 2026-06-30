@@ -1,0 +1,20 @@
+{
+  "id": "workspaces",
+  "name": "Workspaces",
+  "version": "0.1.0",
+  "description": "用于 Windows 桌面管理的工作区实用工具，一键按顺序启动相关应用与配置。",
+  "enabled": true,
+  "builtin": false,
+  "permissions": [
+    { "id": "catalog:read", "label": "读取已有资源列表", "risk": "medium" },
+    { "id": "shell:open", "label": "启动文件、程序与目标", "risk": "medium" },
+    { "id": "ui:toast", "label": "显示通知消息", "risk": "low" },
+    { "id": "storage:plugin", "label": "读写本插件的本地存储数据", "risk": "low" }
+  ],
+  "contributes": {
+    "commands": 20,
+    "searchProviders": 1,
+    "themes": 0,
+    "views": 1
+  }
+}

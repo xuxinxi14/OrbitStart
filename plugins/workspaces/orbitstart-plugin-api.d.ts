@@ -70,7 +70,13 @@ export interface CatalogApi {
 
 export interface LauncherApi {
   launchItem(id: string): Promise<boolean>;
-  launchTarget(target: string, arguments?: string): Promise<boolean>;
+  launchTarget(target: string, arguments?: string, workingDirectory?: string): Promise<boolean>;
+  runScript(scriptType: string, path: string | null, content: string | null): Promise<boolean>;
+  checkProcessRunning(processName: string): Promise<boolean>;
+  checkPortOpen(address: string): Promise<boolean>;
+  checkPathExists(path: string): Promise<boolean>;
+  checkUrlAccessible(url: string): Promise<boolean>;
+  applyWindowLayout(layout: any): Promise<boolean>;
 }
 
 export interface CatalogSnapshot {

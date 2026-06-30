@@ -1,5 +1,6 @@
 import {
   AppWindow,
+  Briefcase,
   Blocks,
   Bookmark,
   CheckCircle2,
@@ -48,7 +49,8 @@ import {
   Workflow,
   X,
   SlidersHorizontal,
-  Keyboard
+  Keyboard,
+  Play
 } from "lucide-react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +60,7 @@ import { SortableContext, arrayMove, rectSortingStrategy, useSortable, horizonta
 import { CSS } from "@dnd-kit/utilities";
 import { LocalGalaxyBackdrop } from "./components/LocalGalaxyBackdrop";
 import { TripPanel } from "./components/TripPanel";
+import { Workspaces } from "./components/Workspaces/Workspaces";
 import {
   contextMenuFromEvent,
   copyText,
@@ -132,7 +135,7 @@ import {
   enterFloatingMode,
   setBubbleSetting
 } from "./lib/native";
-import { FloatingBubble } from "./components/FloatingBubble/FloatingBubble";
+import { FloatingBubble, FloatingBubbleMenu } from "./components/FloatingBubble/FloatingBubble";
 import { createOrbitPluginHost } from "./plugin/api";
 import { localGalaxyAssets } from "./theme/localGalaxyAssets";
 import type {
@@ -162,8 +165,8 @@ const tripStatusLabels: Record<string, string> = {
   "needs-update": "需更新"
 };
 
-type ViewId = "dashboard" | "trips" | "obsidian" | "settings" | "logs";
-type SettingsSection = "general" | "plugins" | "themes" | "obsidian" | "dev" | "data" | "about";
+type ViewId = "dashboard" | "trips" | "obsidian" | "workspaces" | "settings" | "logs";
+type SettingsSection = "general" | "plugins" | "themes" | "obsidian" | "dev" | "data" | "about" | "bubble";
 type AuxPanel = "settings" | "plugins" | "themes" | "about";
 type TodoPanelPayload = {
   noteId: string;
@@ -770,28 +773,92 @@ function FloatingBubbleWrapper() {
   return <FloatingBubble settings={settings} />;
 }
 
+function FloatingBubbleMenuWrapper() {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+
+  useEffect(() => {
+    loadSnapshot()
+      .then((snap) => setSettings(snap.settings))
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.add("bubble-body");
+    document.documentElement.classList.add("bubble-html");
+    return () => {
+      document.body.classList.remove("bubble-body");
+      document.documentElement.classList.remove("bubble-html");
+    };
+  }, []);
+
+  const [themes, setThemes] = useState<ThemeManifest[]>([]);
+  useEffect(() => {
+    loadSnapshot().then((snap) => setThemes(snap.themes)).catch(console.error);
+  }, []);
+
+  const activeTheme = useMemo(() => {
+    return themes.find((theme) => theme.id === settings?.activeThemeId) ?? themes[0];
+  }, [settings?.activeThemeId, themes]);
+
+  useEffect(() => {
+    if (!activeTheme) return;
+    const root = document.documentElement;
+    root.dataset.theme = activeTheme.id;
+    if (activeTheme.id.startsWith("atelier-")) {
+      root.dataset.themeStyle = "atelier";
+    } else {
+      delete root.dataset.themeStyle;
+    }
+    Object.entries(activeTheme.tokens).forEach(([key, value]) => root.style.setProperty(key, value));
+  }, [activeTheme]);
+
+  return <FloatingBubbleMenu settings={settings} />;
+}
+
+function getWindowLabelFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const label = params.get("label");
+  if (label) return label;
+  
+  const panel = params.get("panel");
+  if (panel === "todo") return "todo-panel";
+
+  return null;
+}
+
+function getTauriWindowLabel(): string | null {
+  if (typeof window === "undefined") return null;
+  const internals = (window as any).__TAURI_INTERNALS__;
+  return internals?.metadata?.currentWindow?.label ?? null;
+}
+
 export default function App() {
   const [windowLabel, setWindowLabel] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isTauriRuntime()) {
-      setWindowLabel("main");
-      return;
-    }
-    
     let active = true;
+    let attempts = 0;
+    
     const check = () => {
-      try {
-        const win = getAppWindow();
-        if (win?.label) {
-          if (active) setWindowLabel(win.label);
-        } else {
-          if (active) setTimeout(check, 16);
-        }
-      } catch {
-        if (active) setTimeout(check, 16);
+      if (!active) return;
+      
+      const internalsReady = typeof window !== "undefined" && (window as any).__TAURI_INTERNALS__;
+      if (internalsReady) {
+        const urlLabel = getWindowLabelFromUrl();
+        const tauriLabel = getTauriWindowLabel();
+        setWindowLabel(urlLabel || tauriLabel || "main");
+        return;
+      }
+      
+      attempts++;
+      if (attempts < 150) {
+        setTimeout(check, 10);
+      } else {
+        setWindowLabel(getWindowLabelFromUrl() || "main");
       }
     };
+    
     check();
     return () => {
       active = false;
@@ -804,6 +871,10 @@ export default function App() {
 
   if (windowLabel === "floating-bubble") {
     return <FloatingBubbleWrapper />;
+  }
+
+  if (windowLabel === "floating-bubble-menu") {
+    return <FloatingBubbleMenuWrapper />;
   }
 
   return <MainApp windowLabel={windowLabel} />;
@@ -1066,7 +1137,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
         });
       } else {
         if (manual) {
-          setToast("当前已是最新版本 (v0.6.2)");
+          setToast("当前已是最新版本 (v0.6.4)");
         }
       }
     } catch (err) {
@@ -1115,6 +1186,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
 
   const tripsFeatureEnabled = !pluginStateReady || pluginEnabled("trips-search");
   const obsidianFeatureEnabled = !pluginStateReady || (pluginEnabled("core-obsidian") && pluginEnabled("obsidian-search"));
+  const workspacesFeatureEnabled = !pluginStateReady || pluginEnabled("workspaces");
   const effectivePlugins = useMemo(
     () => plugins.map((plugin) => {
       if (plugin.id === "obsidian-search" && !obsidianFeatureEnabled) {
@@ -1642,6 +1714,157 @@ export function MainApp({ windowLabel }: MainAppProps) {
     Object.entries(activeTheme.tokens).forEach(([key, value]) => root.style.setProperty(key, value));
   }, [activeTheme]);
 
+  const [activeLaunch, setActiveLaunch] = useState<any | null>(null);
+
+  useEffect(() => {
+    const checkLaunch = () => {
+      try {
+        const raw = localStorage.getItem("orbitstart.plugin.workspaces.storage.active_launch");
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (data && data.status === "running") {
+            setActiveLaunch(data);
+            return;
+          }
+        }
+        setActiveLaunch(null);
+      } catch {}
+    };
+
+    checkLaunch();
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "orbitstart.plugin.workspaces.storage.active_launch") {
+        checkLaunch();
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    const timer = setInterval(checkLaunch, 250);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      clearInterval(timer);
+    };
+  }, [pluginHostRevision]);
+
+  const [dashboardWorkspaces, setDashboardWorkspaces] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (activeView === "dashboard") {
+      try {
+        const raw = localStorage.getItem("orbitstart.plugin.workspaces.storage.workspaces");
+        if (raw) {
+          const list = JSON.parse(raw);
+          setDashboardWorkspaces(list.filter((w: any) => w.enabled));
+        } else {
+          setDashboardWorkspaces([]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [activeView, pluginHostRevision]);
+
+  const getWorkspaceIcon = (name: string, color?: string, size = 20) => {
+    const style = { color: color || "var(--text)" };
+    switch (name) {
+      case "AppWindow": return <AppWindow size={size} style={style} />;
+      case "Globe": return <Globe size={size} style={style} />;
+      case "FolderOpen": return <FolderOpen size={size} style={style} />;
+      case "FileText": return <FileText size={size} style={style} />;
+      case "Settings": return <Settings size={size} style={style} />;
+      default: return <Briefcase size={size} style={style} />;
+    }
+  };
+
+  const launchWorkspaceFromDashboard = async (wsId: string) => {
+    if (pluginHost && pluginHost.commands && typeof pluginHost.commands.run === "function") {
+      const sanitizedId = wsId.replace(/[^a-zA-Z0-9_\-\.]/g, "_");
+      try {
+        setToast("正在启动工作区...");
+        await pluginHost.commands.run(`workspaces.run-workspace-${sanitizedId}`);
+        const raw = localStorage.getItem("orbitstart.plugin.workspaces.storage.workspaces");
+        if (raw) {
+          setDashboardWorkspaces(JSON.parse(raw).filter((w: any) => w.enabled));
+        }
+      } catch (err) {
+        console.error(err);
+        setToast(`启动工作区失败: ${String(err)}`);
+      }
+    }
+  };
+
+  const createWorkspaceFromActiveGroup = () => {
+    if (selectedIds.length === 0) return;
+
+    const selectedItems = selectedIds
+      .map((id) => items.find((item) => item.id === id))
+      .filter((item): item is OrbitItem => !!item);
+
+    const activeGroupObj = groups.find((g) => g.id === activeGroup);
+    const groupTitle = activeGroupObj ? activeGroupObj.title : "自定义";
+    const newWsId = "ws_" + Math.random().toString(36).substr(2, 9);
+    
+    const newWs = {
+      id: newWsId,
+      name: `新工作区`,
+      description: `由选中的 ${selectedItems.length} 个资源生成的启动场景`,
+      icon: "Briefcase",
+      color: "#27d7c6",
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      launchCount: 0
+    };
+
+    const newSteps = selectedItems.map((item, idx) => ({
+      id: "step_" + Math.random().toString(36).substr(2, 9),
+      workspaceId: newWsId,
+      order: idx + 1,
+      type: item.kind,
+      itemId: item.id,
+      title: item.title,
+      target: item.target,
+      arguments: item.arguments || "",
+      workingDirectory: "",
+      failurePolicy: "continue",
+      enabled: true,
+      delayMs: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+
+    let existingWorkspaces: any[] = [];
+    try {
+      const raw = localStorage.getItem("orbitstart.plugin.workspaces.storage.workspaces");
+      if (raw) existingWorkspaces = JSON.parse(raw);
+    } catch {}
+
+    let existingSteps: any[] = [];
+    try {
+      const raw = localStorage.getItem("orbitstart.plugin.workspaces.storage.steps");
+      if (raw) existingSteps = JSON.parse(raw);
+    } catch {}
+
+    const nextWs = [...existingWorkspaces, newWs];
+    const nextSteps = [...existingSteps, ...newSteps];
+
+    localStorage.setItem("orbitstart.plugin.workspaces.storage.workspaces", JSON.stringify(nextWs));
+    localStorage.setItem("orbitstart.plugin.workspaces.storage.steps", JSON.stringify(nextSteps));
+
+    if (pluginHost && pluginHost.commands && typeof pluginHost.commands.run === "function") {
+      pluginHost.commands.run("workspaces.reload").catch((err: any) => {
+        console.error("Failed to reload workspaces in plugin", err);
+      });
+    }
+
+    // Clean up batch state
+    setSelectedIds([]);
+    setBatchMode(false);
+
+    localStorage.setItem("orbitstart.workspaces.editing_id", newWsId);
+    setActiveView("workspaces");
+    setToast(`成功将选中的 ${selectedItems.length} 个资源创建为工作区`);
+  };
+
   const visibleKindOptions = baseKindOptions.filter((option) => !option.pluginId || pluginEnabled(option.pluginId));
 
   function itemKindAllowed(item: OrbitItem) {
@@ -1651,6 +1874,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
   }
 
   const visibleGroups = groups.filter((group) => {
+    if (group.id === "work") return false;
     if (group.id === "web") return pluginEnabled("core-websites");
     return true;
   });
@@ -1735,6 +1959,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
     dashboard: { title: "资源中心", subtitle: "统一管理本地应用、文件、网址与自动化入口" },
     trips: { title: "Trips", subtitle: "为资源记录快捷键、流程、参数和状态提示" },
     obsidian: { title: "Obsidian", subtitle: "只读索引本地 vault，聚合笔记和 Markdown 待办" },
+    workspaces: { title: "工作区管理", subtitle: "分组管理启动项，一键按顺序加载办公/开发环境" },
     settings: { title: "设置中心", subtitle: "系统偏好、插件、主题与数据维护" },
     logs: { title: "运行日志", subtitle: "查看最近的插件事件、扫描结果与系统反馈" }
   };
@@ -2670,6 +2895,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
     { id: "dashboard", title: "工作台", icon: <LayoutDashboard size={21} /> },
     ...(tripsFeatureEnabled ? [{ id: "trips" as const, title: "Trips", icon: <Lightbulb size={21} /> }] : []),
     ...(obsidianFeatureEnabled ? [{ id: "obsidian" as const, title: "Obsidian", icon: <NotebookText size={21} /> }] : []),
+    ...(workspacesFeatureEnabled ? [{ id: "workspaces" as const, title: "工作区", icon: <Briefcase size={21} /> }] : []),
     { id: "settings", title: "设置", icon: <Settings size={21} /> },
     { id: "logs", title: "日志", icon: <Database size={21} /> }
   ];
@@ -3010,6 +3236,9 @@ export function MainApp({ windowLabel }: MainAppProps) {
               <strong>已选 {selectedIds.length} 个</strong>
               <button type="button" onClick={() => setSelectedIds(filteredItems.map((item) => item.id))}>全选当前</button>
               <button type="button" onClick={() => setSelectedIds([])}>清空</button>
+              {workspacesFeatureEnabled && (
+                <button type="button" onClick={createWorkspaceFromActiveGroup} disabled={busy || selectedIds.length === 0}>创建为工作区</button>
+              )}
               <button type="button" onClick={batchMoveSelected} disabled={busy || selectedIds.length === 0}>加标签</button>
               <button type="button" className="danger-action" onClick={batchDeleteSelected} disabled={busy || selectedIds.length === 0}>删除</button>
             </div>
@@ -3100,6 +3329,44 @@ export function MainApp({ windowLabel }: MainAppProps) {
               <span>所有核心插件已就绪</span>
             </div>
           </section>
+
+          {workspacesFeatureEnabled && dashboardWorkspaces.length > 0 && (
+            <section className="operation-group workspaces-operation-group">
+              <div className="section-head slim">
+                <h2>快捷工作区</h2>
+              </div>
+              <div className="dashboard-workspaces-list">
+                {dashboardWorkspaces.slice(0, 5).map((ws) => (
+                  <div key={ws.id} className="dashboard-workspace-item">
+                    <div 
+                      className="dashboard-ws-icon" 
+                      style={{ 
+                        backgroundColor: `${ws.color}15`, 
+                        color: ws.color,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}
+                    >
+                      {getWorkspaceIcon(ws.icon || "Briefcase", ws.color, 16)}
+                    </div>
+                    <div className="dashboard-ws-info">
+                      <strong>{ws.name}</strong>
+                      <span>已启动 {ws.launchCount || 0} 次</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      className="dashboard-ws-run-btn" 
+                      onClick={() => launchWorkspaceFromDashboard(ws.id)}
+                      title="启动此工作区"
+                    >
+                      <Play size={12} fill="currentColor" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           <section className="operation-group">
             <div className="section-head slim">
@@ -3621,159 +3888,162 @@ export function MainApp({ windowLabel }: MainAppProps) {
           </button>
         </div>
       </div>
-      {isTauriRuntime() && false && (
-        <div className="setting-card">
-          <p className="eyebrow">Desktop Experience</p>
-          <h2>悬浮启动球</h2>
-          <p>控制启动球的启用状态、缩放尺寸、吸附吸力与不透明度。</p>
-          <div className="setting-list">
-            <label className="setting-inline">
-              <input 
-                type="checkbox" 
-                checked={Boolean(settings?.bubbleEnabled)} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_enabled", e.target.checked ? "true" : "false");
-                  setSettings(snapshot.settings);
-                  if (e.target.checked) {
-                    const { invoke } = await import("@tauri-apps/api/core");
-                    await invoke("open_bubble_window");
-                  } else {
-                    const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-                    try {
-                      const bubble = await WebviewWindow.getByLabel("floating-bubble");
-                      if (bubble) await bubble.close();
-                    } catch (err) {
-                      // Ignore
-                    }
+    </section>
+  );
+
+  const renderBubbleSettings = () => (
+    <section className="settings-page-grid bubble-settings">
+      <div className="setting-card wide-card">
+        <p className="eyebrow">Desktop Experience</p>
+        <h2>悬浮启动球</h2>
+        <p>控制启动球的启用状态、缩放尺寸、吸附吸力与不透明度。</p>
+        <div className="setting-list">
+          <label className="setting-inline">
+            <input 
+              type="checkbox" 
+              checked={Boolean(settings?.bubbleEnabled)} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_enabled", e.target.checked ? "true" : "false");
+                setSettings(snapshot.settings);
+                if (e.target.checked) {
+                  const { invoke } = await import("@tauri-apps/api/core");
+                  await invoke("open_bubble_window");
+                } else {
+                  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+                  try {
+                    const bubble = await WebviewWindow.getByLabel("floating-bubble");
+                    if (bubble) await bubble.close();
+                  } catch (err) {
+                    // Ignore
                   }
-                }} 
-              />
-              启用悬浮启动球
-            </label>
-            <label className="setting-inline">
-              <input 
-                type="checkbox" 
-                checked={Boolean(settings?.bubbleShowWhenMainHidden)} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_show_when_main_hidden", e.target.checked ? "true" : "false");
-                  setSettings(snapshot.settings);
-                }} 
-              />
-              主窗口隐藏时显示悬浮球
-            </label>
-            <label className="setting-inline">
-              <input 
-                type="checkbox" 
-                checked={Boolean(settings?.bubbleAlwaysOnTop)} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_always_on_top", e.target.checked ? "true" : "false");
-                  setSettings(snapshot.settings);
-                }} 
-              />
-              悬浮球始终置顶
-            </label>
-            <label>
-              悬浮球大小
-              <select 
-                value={settings?.bubbleSize ?? 64} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_size", e.target.value);
-                  setSettings(snapshot.settings);
-                }}
-              >
-                <option value="56">小 (56px)</option>
-                <option value="64">中 (64px)</option>
-                <option value="72">大 (72px)</option>
-              </select>
-            </label>
-            <label className="setting-inline">
-              <input 
-                type="checkbox" 
-                checked={Boolean(settings?.bubbleSnapToEdge)} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_snap_to_edge", e.target.checked ? "true" : "false");
-                  setSettings(snapshot.settings);
-                }} 
-              />
-              靠边吸附
-            </label>
-            <label className="setting-inline">
-              <input 
-                type="checkbox" 
-                checked={Boolean(settings?.bubbleExpandOnHover)} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_expand_on_hover", e.target.checked ? "true" : "false");
-                  setSettings(snapshot.settings);
-                }} 
-              />
-              鼠标悬浮展开快捷小球
-            </label>
-            <label className="setting-inline">
-              <input 
-                type="checkbox" 
-                checked={Boolean(settings?.bubbleAvoidFullscreen)} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_avoid_fullscreen", e.target.checked ? "true" : "false");
-                  setSettings(snapshot.settings);
-                }} 
-              />
-              自动规避全屏应用 (暂定选项)
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
-                <span>不透明度</span>
-                <span>{Math.round((settings?.bubbleOpacity ?? 1.0) * 100)}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0.1" 
-                max="1.0" 
-                step="0.05"
-                value={settings?.bubbleOpacity ?? 1.0} 
-                onChange={async (e) => {
-                  const snapshot = await setBubbleSetting("bubble_opacity", e.target.value);
-                  setSettings(snapshot.settings);
-                }} 
-              />
-            </label>
-            <button 
-              type="button" 
-              className="wide-command" 
-              onClick={async () => {
-                localStorage.removeItem("orbitstart_bubble_position");
-                localStorage.removeItem("orbitstart_bubble_align");
-                
-                const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-                const { LogicalPosition } = await import("@tauri-apps/api/dpi");
-                const { currentMonitor } = await import("@tauri-apps/api/window");
-                try {
-                  const bubble = (await WebviewWindow.getByLabel("floating-bubble")) as any;
-                  if (bubble) {
-                    const monitor = await currentMonitor();
-                    if (monitor) {
-                      const scaleFactor = monitor.scaleFactor;
-                      const monitorX = monitor.position.x / scaleFactor;
-                      const monitorWidth = monitor.size.width / scaleFactor;
-                      const monitorY = monitor.position.y / scaleFactor;
-                      const monitorHeight = monitor.size.height / scaleFactor;
-                      
-                      const defaultX = monitorX + monitorWidth - 380;
-                      const defaultY = monitorY + monitorHeight * 0.7 - 60;
-                      await bubble.setPosition(new LogicalPosition(defaultX, defaultY));
-                      await bubble.emit("orbit://bubble-reset-position", { x: defaultX, y: defaultY });
-                    }
-                  }
-                } catch (err) {
-                  // Ignore
                 }
-                setToast("已重置悬浮球位置");
+              }} 
+            />
+            启用悬浮启动球
+          </label>
+          <label className="setting-inline">
+            <input 
+              type="checkbox" 
+              checked={Boolean(settings?.bubbleShowWhenMainHidden)} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_show_when_main_hidden", e.target.checked ? "true" : "false");
+                setSettings(snapshot.settings);
+              }} 
+            />
+            主窗口隐藏时显示悬浮球
+          </label>
+          <label className="setting-inline">
+            <input 
+              type="checkbox" 
+              checked={Boolean(settings?.bubbleAlwaysOnTop)} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_always_on_top", e.target.checked ? "true" : "false");
+                setSettings(snapshot.settings);
+              }} 
+            />
+            悬浮球始终置顶
+          </label>
+          <label>
+            悬浮球大小
+            <select 
+              value={settings?.bubbleSize ?? 64} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_size", e.target.value);
+                setSettings(snapshot.settings);
               }}
             >
-              <span>重置悬浮球位置</span>
-            </button>
-          </div>
+              <option value="56">小 (56px)</option>
+              <option value="64">中 (64px)</option>
+              <option value="72">大 (72px)</option>
+            </select>
+          </label>
+          <label className="setting-inline">
+            <input 
+              type="checkbox" 
+              checked={Boolean(settings?.bubbleSnapToEdge)} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_snap_to_edge", e.target.checked ? "true" : "false");
+                setSettings(snapshot.settings);
+              }} 
+            />
+            靠边吸附
+          </label>
+          <label className="setting-inline">
+            <input 
+              type="checkbox" 
+              checked={Boolean(settings?.bubbleExpandOnHover)} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_expand_on_hover", e.target.checked ? "true" : "false");
+                setSettings(snapshot.settings);
+              }} 
+            />
+            鼠标悬浮展开快捷小球
+          </label>
+          <label className="setting-inline">
+            <input 
+              type="checkbox" 
+              checked={Boolean(settings?.bubbleAvoidFullscreen)} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_avoid_fullscreen", e.target.checked ? "true" : "false");
+                setSettings(snapshot.settings);
+              }} 
+            />
+            自动规避全屏应用 (暂定选项)
+          </label>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+              <span>不透明度</span>
+              <span>{Math.round((settings?.bubbleOpacity ?? 1.0) * 100)}%</span>
+            </div>
+            <input 
+              type="range" 
+              min="0.1" 
+              max="1.0" 
+              step="0.05"
+              value={settings?.bubbleOpacity ?? 1.0} 
+              onChange={async (e) => {
+                const snapshot = await setBubbleSetting("bubble_opacity", e.target.value);
+                setSettings(snapshot.settings);
+              }} 
+            />
+          </label>
+          <button 
+            type="button" 
+            className="wide-command" 
+            onClick={async () => {
+              localStorage.removeItem("orbitstart_bubble_position");
+              localStorage.removeItem("orbitstart_bubble_align");
+              
+              const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+              const { LogicalPosition } = await import("@tauri-apps/api/dpi");
+              const { currentMonitor } = await import("@tauri-apps/api/window");
+              try {
+                const bubble = (await WebviewWindow.getByLabel("floating-bubble")) as any;
+                if (bubble) {
+                  const monitor = await currentMonitor();
+                  if (monitor) {
+                    const scaleFactor = monitor.scaleFactor;
+                    const monitorX = monitor.position.x / scaleFactor;
+                    const monitorWidth = monitor.size.width / scaleFactor;
+                    const monitorY = monitor.position.y / scaleFactor;
+                    const monitorHeight = monitor.size.height / scaleFactor;
+                    
+                    const defaultX = monitorX + monitorWidth - 380;
+                    const defaultY = monitorY + monitorHeight * 0.7 - 60;
+                    await bubble.setPosition(new LogicalPosition(defaultX, defaultY));
+                    await bubble.emit("orbit://bubble-reset-position", { x: defaultX, y: defaultY });
+                  }
+                }
+              } catch (err) {
+                // Ignore
+              }
+              setToast("已重置悬浮球位置");
+            }}
+          >
+            <span>重置悬浮球位置</span>
+          </button>
         </div>
-      )}
+      </div>
     </section>
   );
 
@@ -3820,7 +4090,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
           <span><strong>{items.length}</strong>资源</span>
           <span><strong>{enabledPlugins}</strong>启用插件</span>
           <span><strong>{themes.length}</strong>主题</span>
-          <span><strong>0.6.2</strong>版本</span>
+          <span><strong>0.6.4</strong>版本</span>
         </div>
       </div>
       <div className="setting-card">
@@ -3889,6 +4159,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
       { id: "plugins", title: "插件管理", icon: <Blocks size={18} /> },
       { id: "themes", title: "主题工作室", icon: <Palette size={18} /> },
       ...(obsidianFeatureEnabled ? [{ id: "obsidian" as const, title: "Obsidian", icon: <NotebookText size={18} /> }] : []),
+      ...(isTauriRuntime() ? [{ id: "bubble" as const, title: "悬浮启动球", icon: <CircleDot size={18} /> }] : []),
       { id: "dev", title: "开发套件", icon: <Hammer size={18} /> },
       { id: "data", title: "数据备份", icon: <Database size={18} /> },
       { id: "about", title: "关于", icon: <Info size={18} /> }
@@ -3909,6 +4180,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
           {settingsSection === "plugins" && renderPlugins()}
           {settingsSection === "themes" && renderThemes()}
           {settingsSection === "obsidian" && obsidianFeatureEnabled && renderObsidianSettings()}
+          {settingsSection === "bubble" && isTauriRuntime() && renderBubbleSettings()}
           {settingsSection === "dev" && renderDev()}
           {settingsSection === "data" && renderDataSettings()}
           {settingsSection === "about" && renderAbout()}
@@ -4803,28 +5075,30 @@ export function MainApp({ windowLabel }: MainAppProps) {
             <h1>{activeViewMeta[activeView].title}</h1>
             <span className="title-subtitle">{activeViewMeta[activeView].subtitle}</span>
           </div>
-          <div className="top-actions">
-            <div className="density-slider-container" title={`界面密度: ${densityValue}%`}>
-              <SlidersHorizontal size={15} className="density-slider-icon" />
-              <input
-                type="range"
-                className="density-slider"
-                min="0"
-                max="100"
-                value={densityValue}
-                onChange={handleDensityChange}
-              />
+          {activeView === "dashboard" && (
+            <div className="top-actions">
+              <div className="density-slider-container" title={`界面密度: ${densityValue}%`}>
+                <SlidersHorizontal size={15} className="density-slider-icon" />
+                <input
+                  type="range"
+                  className="density-slider"
+                  min="0"
+                  max="100"
+                  value={densityValue}
+                  onChange={handleDensityChange}
+                />
+              </div>
+              <button type="button" className="icon-action" title="扫描本地程序" onClick={() => runNativeItemScan("shortcuts")} disabled={busy || !pluginEnabled("core-shortcuts")}>
+                <ScanSearch size={19} />
+              </button>
+              <button type="button" className="icon-action" title="数据备份" onClick={() => setBackupOpen(true)}>
+                <Database size={19} />
+              </button>
+              <button type="button" className="icon-action" title="命令面板" onClick={() => setPaletteOpen(true)}>
+                <Search size={19} />
+              </button>
             </div>
-            <button type="button" className="icon-action" title="扫描本地程序" onClick={() => runNativeItemScan("shortcuts")} disabled={busy || !pluginEnabled("core-shortcuts")}>
-              <ScanSearch size={19} />
-            </button>
-            <button type="button" className="icon-action" title="数据备份" onClick={() => setBackupOpen(true)}>
-              <Database size={19} />
-            </button>
-            <button type="button" className="icon-action" title="命令面板" onClick={() => setPaletteOpen(true)}>
-              <Search size={19} />
-            </button>
-          </div>
+          )}
         </header>
 
         {(activeView === "dashboard" || (activeView === "trips" && tripsFeatureEnabled) || (activeView === "obsidian" && obsidianFeatureEnabled)) && (
@@ -4872,6 +5146,7 @@ export function MainApp({ windowLabel }: MainAppProps) {
         {activeView === "dashboard" && renderDashboard()}
         {activeView === "trips" && tripsFeatureEnabled && renderTripsPage()}
         {activeView === "obsidian" && obsidianFeatureEnabled && renderObsidianPage()}
+        {activeView === "workspaces" && workspacesFeatureEnabled && <Workspaces pluginHost={pluginHost} items={items} />}
         {activeView === "settings" && renderSettings()}
         {activeView === "logs" && renderLogs()}
       </section>
@@ -5316,6 +5591,33 @@ export function MainApp({ windowLabel }: MainAppProps) {
       )}
       {importPreview && renderImportPreviewDialog()}
       </main>
+      {activeLaunch && (
+        <div className="workspace-launch-progress-overlay">
+          <div className="workspace-launch-progress-panel">
+            <div className="launch-panel-header">
+              <Workflow size={20} className="spin-slow" />
+              <div>
+                <h3>正在启动工作区</h3>
+                <p>{activeLaunch.workspaceName}</p>
+              </div>
+            </div>
+            
+            <div className="launch-progress-bar-wrapper">
+              <div 
+                className="launch-progress-bar-fill" 
+                style={{ 
+                  width: `${(activeLaunch.currentStepIndex / activeLaunch.totalSteps) * 100}%` 
+                }}
+              />
+            </div>
+            
+            <div className="launch-panel-footer">
+              <span>步骤 {activeLaunch.currentStepIndex + 1} / {activeLaunch.totalSteps}</span>
+              <strong>{activeLaunch.currentStepTitle}</strong>
+            </div>
+          </div>
+        </div>
+      )}
       {contextMenu && renderContextMenu()}
     </>
   );

@@ -3,7 +3,6 @@ import type { AppSettings, OrbitCommand, OrbitGroup, OrbitItem, OrbitPluginManif
 export const groups: OrbitGroup[] = [
   { id: "all", title: "全部", icon: "Orbit", description: "所有已索引资源" },
   { id: "apps", title: "应用", icon: "AppWindow", description: "程序、快捷方式和系统工具" },
-  { id: "work", title: "工作区", icon: "PanelsTopLeft", description: "按项目启动一组工具" },
   { id: "web", title: "网址", icon: "Globe", description: "常用网页和控制台" },
   { id: "scripts", title: "脚本", icon: "TerminalSquare", description: "PowerShell、Node、Python 等动作入口" },
   { id: "plugins", title: "插件", icon: "Blocks", description: "由插件提供的资源和命令" }
@@ -29,7 +28,7 @@ export const items: OrbitItem[] = [
     title: "OrbitStart workspace",
     subtitle: "E:\\OrbitStart",
     kind: "folder",
-    group: "work",
+    group: "apps",
     target: "E:\\OrbitStart",
     aliases: ["orbit", "project"],
     tags: ["project"],
@@ -57,7 +56,7 @@ export const items: OrbitItem[] = [
     title: "Morning workspace",
     subtitle: "Launches a small starter chain",
     kind: "action_chain",
-    group: "work",
+    group: "apps",
     target: "C:\\Windows\\System32\\notepad.exe\nhttps://github.com\nE:\\OrbitStart",
     aliases: ["chain", "workspace"],
     tags: ["automation", "template"],

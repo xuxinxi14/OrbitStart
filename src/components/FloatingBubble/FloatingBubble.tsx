@@ -1,16 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
-import { 
-  Search, 
-  Plus, 
-  FolderKanban, 
-  Clock, 
-  Settings, 
-  Globe 
-} from "lucide-react";
-import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
-import { LogicalPosition, LogicalSize } from "@tauri-apps/api/dpi";
-import { listen } from "@tauri-apps/api/event";
-import { exit } from "@tauri-apps/plugin-process";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
+import { emit, listen } from "@tauri-apps/api/event";
+import { currentMonitor, getCurrentWindow } from "@tauri-apps/api/window";
+import { Clock, FolderKanban, Plus, Search, Settings } from "lucide-react";
 import type { AppSettings } from "../../types";
 import { exitFloatingModeAndShowMain } from "../../lib/native";
 import "./FloatingBubble.css";
@@ -24,24 +17,23 @@ async function animateWindowPosition(
   durationMs: number
 ) {
   const startTime = performance.now();
-  
+
   return new Promise<void>((resolve) => {
     const tick = async (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / durationMs, 1);
-      // Ease out quad
       const ease = progress * (2 - progress);
-      
+
       const currentX = startX + (endX - startX) * ease;
       const currentY = startY + (endY - startY) * ease;
-      
+
       try {
         await appWin.setPosition(new LogicalPosition(currentX, currentY));
-      } catch (err) {
+      } catch {
         resolve();
         return;
       }
-      
+
       if (progress < 1) {
         requestAnimationFrame(tick);
       } else {
@@ -56,19 +48,38 @@ interface FloatingBubbleProps {
   settings: AppSettings | null;
 }
 
+function clearTimer(timerRef: React.MutableRefObject<number | null>) {
+  if (timerRef.current !== null) {
+    window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
+}
+
+async function logBubbleError(message: string) {
+  try {
+    await invoke("log_frontend_error", { message });
+  } catch {
+    console.error(message);
+  }
+}
+
 export function FloatingBubble({ settings }: FloatingBubbleProps) {
   const sizeValue = settings?.bubbleSize ?? 64;
-  const opacityValue = settings?.bubbleOpacity ?? 1.0;
+  const configuredOpacity = settings?.bubbleOpacity ?? 1.0;
   const alwaysOnTop = settings?.bubbleAlwaysOnTop ?? true;
   const expandOnHover = settings?.bubbleExpandOnHover ?? true;
-  const expandDelay = settings?.bubbleExpandDelayMs ?? 200;
+  const expandDelayMs = Math.max(80, settings?.bubbleExpandDelayMs ?? 180);
+  const snapToEdge = settings?.bubbleSnapToEdge ?? true;
 
-  const [isHovered, setIsHovered] = useState(false);
   const [isMainBubbleHovered, setIsMainBubbleHovered] = useState(false);
   const [align, setAlign] = useState<"left" | "right">("right");
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+  const [previewOpacity, setPreviewOpacity] = useState(configuredOpacity);
 
-  const hoverTimeoutRef = useRef<number | null>(null);
+  const showMenuTimerRef = useRef<number | null>(null);
+  const hideMenuTimerRef = useRef<number | null>(null);
+  const bubbleHoveredRef = useRef(false);
+  const menuHoveredRef = useRef(false);
+
   const dragRef = useRef<{
     isDragging: boolean;
     startScreenX: number;
@@ -79,11 +90,57 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
     hasMoved: boolean;
   } | null>(null);
 
-  // Load alignment and snap coordinates from localStorage
+  useEffect(() => {
+    setPreviewOpacity(configuredOpacity);
+  }, [configuredOpacity]);
+
+  useEffect(() => {
+    let unlistenOpacity: (() => void) | undefined;
+    let unlistenMenuHover: (() => void) | undefined;
+    let unlistenPosition: (() => void) | undefined;
+
+    listen<number>("orbit://bubble-opacity-preview", (event) => {
+      const value = Number(event.payload);
+      if (Number.isFinite(value)) {
+        setPreviewOpacity(Math.max(0.1, Math.min(1, value)));
+      }
+    }).then((unlisten) => {
+      unlistenOpacity = unlisten;
+    });
+
+    listen<string>("orbit://bubble-menu-hover", (event) => {
+      menuHoveredRef.current = event.payload === "enter";
+      if (menuHoveredRef.current) {
+        clearTimer(hideMenuTimerRef);
+      } else {
+        scheduleHideMenu();
+      }
+    }).then((unlisten) => {
+      unlistenMenuHover = unlisten;
+    });
+
+    listen<{ x: number; y: number; align: "left" | "right" }>("orbit://bubble-position-changed", (event) => {
+      const payload = event.payload;
+      if (!payload || !Number.isFinite(payload.x) || !Number.isFinite(payload.y)) return;
+      const nextAlign = payload.align === "left" ? "left" : "right";
+      setAlign(nextAlign);
+      localStorage.setItem("orbitstart_bubble_align", nextAlign);
+      localStorage.setItem("orbitstart_bubble_position", JSON.stringify({ x: payload.x, y: payload.y }));
+    }).then((unlisten) => {
+      unlistenPosition = unlisten;
+    });
+
+    return () => {
+      unlistenOpacity?.();
+      unlistenMenuHover?.();
+      unlistenPosition?.();
+    };
+  }, []);
+
   useEffect(() => {
     const savedAlign = localStorage.getItem("orbitstart_bubble_align");
     const savedPos = localStorage.getItem("orbitstart_bubble_position");
-    
+
     if (savedAlign === "left" || savedAlign === "right") {
       setAlign(savedAlign);
     }
@@ -97,7 +154,6 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
         console.error("Failed to parse saved bubble position", e);
       }
     } else {
-      // Default to right edge of current monitor
       const runInit = async () => {
         try {
           const monitor = await currentMonitor();
@@ -107,9 +163,15 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
             const monitorWidth = monitor.size.width / scaleFactor;
             const monitorY = monitor.position.y / scaleFactor;
             const monitorHeight = monitor.size.height / scaleFactor;
-            
-            const defaultX = monitorX + monitorWidth - 380;
-            const defaultY = monitorY + monitorHeight * 0.7 - 60;
+
+            const defaultX = monitorX + monitorWidth - sizeValue - 18;
+            const defaultY = Math.max(
+              monitorY + 10,
+              Math.min(
+                monitorY + monitorHeight - sizeValue - 10,
+                monitorY + monitorHeight * 0.7 - sizeValue / 2
+              )
+            );
             await appWin.setPosition(new LogicalPosition(defaultX, defaultY));
             setAlign("right");
             localStorage.setItem("orbitstart_bubble_align", "right");
@@ -122,34 +184,14 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
       void runInit();
     }
 
-    // Force always on top if configured
     appWin.setAlwaysOnTop(alwaysOnTop).catch(() => undefined);
-  }, [alwaysOnTop]);
+  }, [alwaysOnTop, sizeValue]);
 
-  // Transparency refresh hack for Windows 11 DWM
-  useEffect(() => {
-    const appWin = getCurrentWindow() as any;
-    const timer = setTimeout(async () => {
-      try {
-        await appWin.setSize(new LogicalSize(381, 120));
-        await appWin.setSize(new LogicalSize(380, 120));
-      } catch (e) {
-        console.error("Failed DWM transparency hack", e);
-      }
-    }, 150);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Prevent default browser context menu globally for this window
   useEffect(() => {
     const preventDefault = (e: MouseEvent) => e.preventDefault();
     window.addEventListener("contextmenu", preventDefault);
-    
-    const closeMenu = () => setContextMenu(null);
-    window.addEventListener("click", closeMenu);
 
     let unlistenReset: (() => void) | undefined;
-    
     listen("orbit://bubble-reset-position", () => {
       setAlign("right");
       localStorage.setItem("orbitstart_bubble_align", "right");
@@ -158,72 +200,134 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
     });
 
     return () => {
+      clearTimer(showMenuTimerRef);
+      clearTimer(hideMenuTimerRef);
+      void invoke("hide_bubble_menu_window").catch(() => undefined);
       window.removeEventListener("contextmenu", preventDefault);
-      window.removeEventListener("click", closeMenu);
       unlistenReset?.();
     };
   }, []);
 
   const styleVariables = useMemo(() => {
-    const ballSize = sizeValue === 56 ? 36 : sizeValue === 72 ? 48 : 42;
-    const gap = sizeValue === 56 ? 8 : sizeValue === 72 ? 12 : 10;
     return {
       "--main-size": `${sizeValue}px`,
-      "--ball-size": `${ballSize}px`,
-      "--gap": `${gap}px`,
-      "opacity": opacityValue,
+      opacity: previewOpacity,
     } as React.CSSProperties;
-  }, [sizeValue, opacityValue]);
+  }, [sizeValue, previewOpacity]);
 
-  // Main bubble image mapping
   const isLarge = sizeValue >= 64;
   const normalImg = isLarge ? "/design/大悬浮球(无光晕).png" : "/design/小悬浮球(无光晕).png";
   const hoverImg = isLarge ? "/design/大悬浮球(有光晕).png" : "/design/小悬浮球(有光晕).png";
 
-  // Hover timers
-  const handlePointerEnter = () => {
+  function scheduleShowMenu() {
     if (!expandOnHover) return;
-    if (hoverTimeoutRef.current) {
-      window.clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    hoverTimeoutRef.current = window.setTimeout(() => {
-      setIsHovered(true);
-    }, expandDelay);
-  };
+    clearTimer(hideMenuTimerRef);
+    clearTimer(showMenuTimerRef);
+    showMenuTimerRef.current = window.setTimeout(() => {
+      if (!bubbleHoveredRef.current || dragRef.current?.isDragging) return;
+      void invoke("show_bubble_menu_window").catch((error) => {
+        void logBubbleError(`show_bubble_menu_window failed: ${String(error)}`);
+      });
+    }, expandDelayMs);
+  }
 
-  const handlePointerLeave = () => {
-    if (hoverTimeoutRef.current) {
-      window.clearTimeout(hoverTimeoutRef.current);
-      hoverTimeoutRef.current = null;
-    }
-    hoverTimeoutRef.current = window.setTimeout(() => {
-      setIsHovered(false);
-    }, 400); // 400ms collapse delay
-  };
+  function scheduleHideMenu() {
+    clearTimer(showMenuTimerRef);
+    clearTimer(hideMenuTimerRef);
+    hideMenuTimerRef.current = window.setTimeout(() => {
+      if (bubbleHoveredRef.current || menuHoveredRef.current) return;
+      void invoke("hide_bubble_menu_window").catch(() => undefined);
+    }, 200);
+  }
 
-  // Drag operations
+  function showMenuNow() {
+    clearTimer(showMenuTimerRef);
+    clearTimer(hideMenuTimerRef);
+    void invoke("show_bubble_menu_window").catch((error) => {
+      void logBubbleError(`show_bubble_menu_window failed: ${String(error)}`);
+    });
+  }
+
+  function markBubbleHovered() {
+    if (!bubbleHoveredRef.current) {
+      bubbleHoveredRef.current = true;
+      setIsMainBubbleHovered(true);
+      scheduleShowMenu();
+    }
+  }
+
   const handlePointerDown = async (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return; // Only drag with left click
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (e.button !== 0) return;
+    e.preventDefault();
+    clearTimer(showMenuTimerRef);
+    bubbleHoveredRef.current = false;
+    setIsMainBubbleHovered(false);
+    void invoke("hide_bubble_menu_window").catch(() => undefined);
 
     const appWin = getCurrentWindow() as any;
-    const pos = await appWin.outerPosition();
-    const monitor = await currentMonitor();
-    const sf = monitor?.scaleFactor ?? 1;
-
     dragRef.current = {
       isDragging: true,
       startScreenX: e.screenX,
       startScreenY: e.screenY,
-      startWindowX: pos.x / sf,
-      startWindowY: pos.y / sf,
-      scaleFactor: sf,
+      startWindowX: 0,
+      startWindowY: 0,
+      scaleFactor: 1,
       hasMoved: false,
     };
+
+    try {
+      const startPos = await appWin.outerPosition();
+      await appWin.startDragging();
+      const endPos = await appWin.outerPosition();
+      const moved = Math.abs(endPos.x - startPos.x) > 4 || Math.abs(endPos.y - startPos.y) > 4;
+
+      if (!moved) {
+        await exitFloatingModeAndShowMain();
+        return;
+      }
+
+      const monitor = await currentMonitor();
+      if (monitor) {
+        const sf = monitor.scaleFactor;
+        const currentX = endPos.x / sf;
+        const currentY = endPos.y / sf;
+        const monitorX = monitor.position.x / sf;
+        const monitorWidth = monitor.size.width / sf;
+        const monitorY = monitor.position.y / sf;
+        const monitorHeight = monitor.size.height / sf;
+        const centerX = currentX + sizeValue / 2;
+        const monitorCenterX = monitorX + monitorWidth / 2;
+        const isLeft = centerX < monitorCenterX;
+        const snapX = isLeft ? monitorX + 8 : (monitorX + monitorWidth - sizeValue - 8);
+        const minY = monitorY + 10;
+        const maxY = monitorY + monitorHeight - sizeValue - 10;
+        const snapY = Math.max(minY, Math.min(maxY, currentY));
+
+        if (snapToEdge) {
+          await animateWindowPosition(appWin, currentX, currentY, snapX, snapY, 120);
+        }
+
+        const newAlign = isLeft ? "left" : "right";
+        const savedX = snapToEdge ? snapX : currentX;
+        const savedY = snapToEdge ? snapY : currentY;
+        setAlign(newAlign);
+        localStorage.setItem("orbitstart_bubble_align", newAlign);
+        localStorage.setItem("orbitstart_bubble_position", JSON.stringify({ x: savedX, y: savedY }));
+      }
+    } catch (error) {
+      await invoke("begin_bubble_drag").catch((fallbackError) => {
+        void logBubbleError(`bubble drag failed: ${String(error)}; fallback failed: ${String(fallbackError)}`);
+      });
+    } finally {
+      dragRef.current = null;
+    }
   };
 
   const handlePointerMove = async (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) {
+      markBubbleHovered();
+      return;
+    }
     if (!dragRef.current || !dragRef.current.isDragging) return;
 
     const deltaX = e.screenX - dragRef.current.startScreenX;
@@ -243,13 +347,20 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
   };
 
   const handlePointerUp = async (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return;
+    if (!dragRef.current) {
+      if (e.button === 2) {
+        e.preventDefault();
+        bubbleHoveredRef.current = true;
+        setIsMainBubbleHovered(true);
+        showMenuNow();
+      }
+      return;
+    }
     e.currentTarget.releasePointerCapture(e.pointerId);
 
     const appWin = getCurrentWindow() as any;
 
     if (dragRef.current.hasMoved) {
-      // Snapping logic
       const monitor = await currentMonitor();
       if (monitor) {
         const pos = await appWin.outerPosition();
@@ -262,119 +373,162 @@ export function FloatingBubble({ settings }: FloatingBubbleProps) {
         const monitorY = monitor.position.y / sf;
         const monitorHeight = monitor.size.height / sf;
 
-        // Snap closest edge
-        const centerX = currentX + 380 / 2;
+        const centerX = currentX + sizeValue / 2;
         const monitorCenterX = monitorX + monitorWidth / 2;
         const isLeft = centerX < monitorCenterX;
 
-        const snapX = isLeft ? monitorX : (monitorX + monitorWidth - 380);
+        const snapX = isLeft ? monitorX + 8 : (monitorX + monitorWidth - sizeValue - 8);
         const minY = monitorY + 10;
-        const maxY = monitorY + monitorHeight - 120 - 10;
+        const maxY = monitorY + monitorHeight - sizeValue - 10;
         const snapY = Math.max(minY, Math.min(maxY, currentY));
 
-        await animateWindowPosition(appWin, currentX, currentY, snapX, snapY, 160);
+        if (snapToEdge) {
+          await animateWindowPosition(appWin, currentX, currentY, snapX, snapY, 160);
+        }
 
         const newAlign = isLeft ? "left" : "right";
+        const savedX = snapToEdge ? snapX : currentX;
+        const savedY = snapToEdge ? snapY : currentY;
         setAlign(newAlign);
         localStorage.setItem("orbitstart_bubble_align", newAlign);
-        localStorage.setItem("orbitstart_bubble_position", JSON.stringify({ x: snapX, y: snapY }));
+        localStorage.setItem("orbitstart_bubble_position", JSON.stringify({ x: savedX, y: savedY }));
       }
     } else {
-      // Clicked! Hide bubble and restore main window
       await exitFloatingModeAndShowMain();
     }
 
     dragRef.current = null;
+    if (bubbleHoveredRef.current) scheduleShowMenu();
+  };
+
+  const handlePointerEnter = () => {
+    bubbleHoveredRef.current = true;
+    setIsMainBubbleHovered(true);
+    scheduleShowMenu();
+  };
+
+  const handlePointerLeave = () => {
+    bubbleHoveredRef.current = false;
+    setIsMainBubbleHovered(false);
+    if (!dragRef.current?.isDragging) scheduleHideMenu();
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    setContextMenu({ x: e.clientX, y: e.clientY });
+    showMenuNow();
   };
 
-  const handleMenuAction = async (actionName: string) => {
-    setContextMenu(null);
-    if (actionName === "exit") {
-      await exit(0);
-    } else if (actionName === "hide") {
-      const appWin = getCurrentWindow() as any;
-      await appWin.hide();
-    } else {
-      await exitFloatingModeAndShowMain(actionName);
+  const handleMouseMove = () => {
+    markBubbleHovered();
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (e.button === 2) {
+      e.preventDefault();
+      bubbleHoveredRef.current = true;
+      setIsMainBubbleHovered(true);
+      showMenuNow();
     }
   };
 
-  const actions = [
-    { id: "search", name: "search", label: "搜索", tooltip: "搜索资源", icon: Search },
-    { id: "add", name: "add-resource", label: "添加", tooltip: "添加资源", icon: Plus },
-    { id: "work", name: "workspace", label: "workspace", tooltip: "工作区", icon: FolderKanban },
-    { id: "recent", name: "recent", label: "最近", tooltip: "最近使用", icon: Clock },
-    { id: "settings", name: "settings", label: "设置", tooltip: "设置", icon: Settings },
-  ];
-
   return (
     <div className="bubble-window-wrapper">
-      <div 
-        className={`bubble-active-area align-${align} ${isHovered ? "expanded" : "collapsed"}`}
+      <div
+        className={`bubble-active-area align-${align}`}
         style={styleVariables}
-        onPointerEnter={handlePointerEnter}
-        onPointerLeave={handlePointerLeave}
         onContextMenu={handleContextMenu}
       >
-        {/* Main Ball */}
-        <div 
+        <div
           className={`main-bubble ${isMainBubbleHovered ? "hovered" : ""}`}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          onMouseEnter={() => setIsMainBubbleHovered(true)}
-          onMouseLeave={() => setIsMainBubbleHovered(false)}
+          onPointerEnter={handlePointerEnter}
+          onPointerLeave={handlePointerLeave}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          title="点击打开 OrbitStart，右键展开快捷操作"
         >
-          <img 
-            src={isMainBubbleHovered ? hoverImg : normalImg} 
-            alt="OrbitStart" 
+          <img
+            src={isMainBubbleHovered ? hoverImg : normalImg}
+            alt="OrbitStart"
             className="bubble-img"
             draggable={false}
           />
         </div>
-
-        {/* Action Balls */}
-        <div className="shortcut-balls-container">
-          {actions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <div key={action.id} className="shortcut-ball-wrapper">
-                <button 
-                  className="shortcut-ball"
-                  onClick={() => handleMenuAction(action.name)}
-                  type="button"
-                >
-                  <Icon size={18} />
-                </button>
-                <div className="tooltip">{action.tooltip}</div>
-              </div>
-            );
-          })}
-        </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Context Menu Overlay */}
-      {contextMenu && (
-        <div 
-          className="bubble-context-menu" 
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <button onClick={() => handleMenuAction("open")}>打开 OrbitStart</button>
-          <button onClick={() => handleMenuAction("search")}>聚焦搜索</button>
-          <button onClick={() => handleMenuAction("add-resource")}>添加资源</button>
-          <button onClick={() => handleMenuAction("settings")}>设置</button>
-          <button onClick={() => handleMenuAction("hide")}>暂时隐藏悬浮球</button>
-          <hr className="menu-divider" />
-          <button onClick={() => handleMenuAction("exit")} className="menu-danger">退出 OrbitStart</button>
-        </div>
-      )}
+const menuActions = [
+  { id: "search", label: "搜索", icon: Search },
+  { id: "add-resource", label: "添加", icon: Plus },
+  { id: "workspace", label: "工作区", icon: FolderKanban },
+  { id: "recent", label: "最近", icon: Clock },
+  { id: "settings", label: "设置", icon: Settings },
+] as const;
+
+export function FloatingBubbleMenu({ settings }: FloatingBubbleProps) {
+  const opacityValue = settings?.bubbleOpacity ?? 1.0;
+  const [hoveredAction, setHoveredAction] = useState<string | null>(null);
+
+  const normalActionImg = "/design/小悬浮球(无光晕).png";
+  const hoverActionImg = "/design/小悬浮球(有光晕).png";
+
+  useEffect(() => {
+    return () => {
+      void emit("orbit://bubble-menu-hover", "leave").catch(() => undefined);
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    void emit("orbit://bubble-menu-hover", "enter").catch(() => undefined);
+  };
+
+  const handleMouseLeave = () => {
+    setHoveredAction(null);
+    void emit("orbit://bubble-menu-hover", "leave").catch(() => undefined);
+  };
+
+  const handleAction = async (action: string) => {
+    await emit("orbit://bubble-menu-hover", "leave").catch(() => undefined);
+    await exitFloatingModeAndShowMain(action);
+  };
+
+  return (
+    <div
+      className="bubble-menu-shell"
+      style={{ opacity: opacityValue }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      {menuActions.map((action) => {
+        const Icon = action.icon;
+        return (
+          <button
+            key={action.id}
+            type="button"
+            className="bubble-menu-action"
+            title={action.label}
+            onPointerEnter={() => setHoveredAction(action.id)}
+            onPointerLeave={() => setHoveredAction((current) => current === action.id ? null : current)}
+            onClick={() => void handleAction(action.id)}
+          >
+            <img
+              src={hoveredAction === action.id ? hoverActionImg : normalActionImg}
+              alt=""
+              aria-hidden="true"
+              className="bubble-menu-action-bg"
+              draggable={false}
+            />
+            <Icon size={18} />
+            <span>{action.label}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -7,7 +7,7 @@
 
 把应用、文件夹、网址、脚本、书签、工作区和动作入口收进一个本地启动工作台。
 
-![Version](https://img.shields.io/badge/version-0.6.0-2f81f7)
+![Version](https://img.shields.io/badge/version-0.6.3-2f81f7)
 ![Platform](https://img.shields.io/badge/platform-Windows-0078d4)
 ![Built with Tauri](https://img.shields.io/badge/Tauri-2.x-24c8db)
 ![License](https://img.shields.io/badge/license-MIT-green)

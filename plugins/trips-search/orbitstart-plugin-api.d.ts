@@ -17,6 +17,8 @@ export interface OrbitPluginContext {
   storage: PluginStorage;
   trips: TripsApi;
   obsidian: ObsidianApi;
+  catalog: CatalogApi;
+  launcher: LauncherApi;
 }
 
 export interface RegisteredCommand {
@@ -60,6 +62,43 @@ export interface TripsApi {
 export interface ObsidianApi {
   search(query: string): Promise<ObsidianSearchResult[]>;
   open(vaultId: string, relativePath: string, lineNumber?: number): Promise<boolean | string>;
+}
+
+export interface CatalogApi {
+  getSnapshot(): Promise<CatalogSnapshot>;
+}
+
+export interface LauncherApi {
+  launchItem(id: string): Promise<boolean>;
+  launchTarget(target: string, arguments?: string): Promise<boolean>;
+}
+
+export interface CatalogSnapshot {
+  items: Array<{
+    id: string;
+    title: string;
+    subtitle: string;
+    kind: string;
+    group: string;
+    target: string;
+    arguments?: string;
+    aliases: string[];
+    tags: string[];
+    icon: string;
+    accent: string;
+    favorite: boolean;
+    launchCount: number;
+    lastLaunchedAt?: string | null;
+    sortOrder: number;
+  }>;
+  groups: Array<{
+    id: string;
+    title: string;
+    icon: string;
+    description: string;
+    custom: boolean;
+    sortOrder: number;
+  }>;
 }
 
 export interface TripSearchResult {

@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "OrbitStart desktop shell permissions for the main window and companion windows.",
-  "windows": ["main", "settings", "plugins", "themes", "about", "todo-panel", "floating-bubble"],
+  "windows": ["main", "settings", "plugins", "themes", "about", "todo-panel", "floating-bubble", "floating-bubble-menu"],
   "permissions": [
     "core:default",
     "core:event:default",

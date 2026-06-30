@@ -401,6 +401,10 @@ export function buildSortedResults(params: {
   const q = paletteQuery.trim().toLowerCase();
 
   if (!q) {
+    const wsResults = (extraPluginResults ?? [])
+      .filter((r) => r.source === "workspaces" && !r.id.includes("reload"))
+      .map((r) => ({ ...r, _score: 150 }));
+
     // Empty query: surface what the user actually uses, not just favorites.
     // Priority order (each tier only breaks ties within the previous tier):
     //   1. recency bonus  — most recently launched first
@@ -430,7 +434,7 @@ export function buildSortedResults(params: {
       _score: scoreCommand(cmd, "")
     }));
 
-    return [...itemResults.slice(0, 10), ...cmdResults].slice(0, 16);
+    return [...wsResults, ...itemResults.slice(0, 10), ...cmdResults].slice(0, 16);
   }
 
   // Scored search
@@ -456,7 +460,10 @@ export function buildSortedResults(params: {
   const merged = [
     ...itemResults,
     ...cmdResults,
-    ...(extraPluginResults ?? []).map((r) => ({ ...r, _score: W.MATCH_BASE }))
+    ...(extraPluginResults ?? []).map((r) => {
+      const isWs = r.source === "workspaces";
+      return { ...r, _score: isWs ? 150 : W.MATCH_BASE };
+    })
   ];
 
   merged.sort((a, b) => b._score - a._score);

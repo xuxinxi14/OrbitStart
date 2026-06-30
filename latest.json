@@ -1,11 +1,11 @@
 {
-  "version": "0.6.2",
+  "version": "0.6.4",
   "notes": "1. 修复了标签页拖拽时的排版崩溃 Bug\n2. 解决了右上角快捷键徽标遮挡缺陷\n3. 带来了全新的多键组合快捷键录制功能",
   "pub_date": "2026-06-25T01:30:00Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMmFCZmljUjBNMTJ1dFFFNjM0N1g1R1BMTGg5Vm51QUhTSFU3aDd0L3RJUGthTWJhSU5WelF4WUFMLy94em5adHdmZFNsdTJxRlhnNktQbFFacjJ4aXZhb3phRktWWXd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzgyMzI3MDc3CWZpbGU6T3JiaXRTdGFydF8wLjYuMF94NjQtc2V0dXAuZXhlCm9RWGhqd0dBblVTV1NRRDhxdXVTck16WE01R05hTU1HNGFuS2FuMmhCbWNPT0RPbUFHaTlVZHA2R01pV3BDcVdydHFGK29VTE9WbU9vS24yLy80MkJnPT0K",
-      "url": "https://github.com/xuxinxi14/OrbitStart/releases/download/v0.6.2/OrbitStart_0.6.2_x64-setup.exe"
+      "url": "https://github.com/xuxinxi14/OrbitStart/releases/download/v0.6.4/OrbitStart_0.6.4_x64-setup.exe"
     }
   }
 }
